@@ -8,7 +8,7 @@ import { eq, and, isNull } from "drizzle-orm";
 // POST - Add member to team
 export async function POST(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.teamId;
+    const { teamId } = await params;
 
     // Get the team
     const teamData = await db.query.team.findFirst({
@@ -139,7 +139,7 @@ export async function POST(
 // DELETE - Remove member from team
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -150,7 +150,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.teamId;
+    const { teamId } = await params;
     const { searchParams } = new URL(request.url);
     const userIdToRemove = searchParams.get("userId");
 
@@ -242,7 +242,7 @@ export async function DELETE(
 // PATCH - Update member role
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -253,7 +253,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.teamId;
+    const { teamId } = await params;
 
     // Get the team
     const teamData = await db.query.team.findFirst({

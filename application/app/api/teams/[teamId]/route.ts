@@ -1,3 +1,4 @@
+// app/api/teams/[teamId]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { team, teamMember } from "@/drizzle/schema";
@@ -6,9 +7,11 @@ import { eq, and, isNull } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
+    const { teamId } = await params;
+
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -16,8 +19,6 @@ export async function GET(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const teamId = params.teamId;
 
     // Get the team with members
     const teamData = await db.query.team.findFirst({
@@ -48,48 +49,7 @@ export async function GET(
       );
     }
 
-    // Determine user's role and permissions
-    const userOrgMember = activeOrg.members.find(
-      (m) => m.userId === session.user.id
-    );
-    const isOrgOwner = userOrgMember?.role === "owner";
-    const isOrgAdmin = userOrgMember?.role === "admin";
-
-    const userTeamMember = teamData.teamMembers.find(
-      (m) => m.userId === session.user.id
-    );
-    const isTeamLeader = userTeamMember?.role === "leader";
-    const isTeamMember = !!userTeamMember;
-
-    // Check if user can even view this team
-    if (!isOrgOwner && !isOrgAdmin && !isTeamMember) {
-      return NextResponse.json(
-        { error: "You do not have access to this team" },
-        { status: 403 }
-      );
-    }
-
-    // Determine what the user can do
-    const canManageMembers = isOrgOwner || isOrgAdmin || isTeamLeader;
-    const canManageSettings = isOrgOwner || isOrgAdmin || isTeamLeader;
-    const canDeleteTeam = isOrgOwner || isOrgAdmin;
-
-    return NextResponse.json({
-      team: teamData,
-      userRole: userTeamMember?.role || null,
-      orgRole: userOrgMember?.role || null,
-      permissions: {
-        canManageMembers,
-        canManageSettings,
-        canDeleteTeam,
-        canViewUpdates: isTeamMember,
-        canSubmitUpdates: isTeamMember,
-      },
-      // For convenience in the UI
-      canManageMembers,
-      canManageSettings,
-      canDeleteTeam,
-    });
+    return NextResponse.json(teamData);
   } catch (error) {
     console.error("Error fetching team:", error);
     return NextResponse.json(
@@ -101,9 +61,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
+    const { teamId } = await params;
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -112,7 +73,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.teamId;
+    const body = await request.json();
+    const { name, description, membersCanSeeUpdates, membersCanSeeInsights } =
+      body;
 
     // Get the team
     const teamData = await db.query.team.findFirst({
@@ -123,73 +86,55 @@ export async function PATCH(
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // Get user's org membership
-    const activeOrg = await auth.api.getFullOrganization({
-      headers: request.headers,
-    });
-
-    if (!activeOrg || activeOrg.id !== teamData.organizationId) {
-      return NextResponse.json(
-        { error: "Not authorized for this organization" },
-        { status: 403 }
-      );
-    }
-
-    // Check permissions
-    const userOrgMember = activeOrg.members.find(
-      (m) => m.userId === session.user.id
-    );
-    const isOrgOwnerOrAdmin =
-      userOrgMember?.role === "owner" || userOrgMember?.role === "admin";
-
-    const userTeamMember = await db.query.teamMember.findFirst({
+    // Check if user is a team leader or org owner/admin
+    const teamMemberData = await db.query.teamMember.findFirst({
       where: and(
         eq(teamMember.teamId, teamId),
         eq(teamMember.userId, session.user.id),
         isNull(teamMember.deletedAt)
       ),
     });
-    const isTeamLeader = userTeamMember?.role === "leader";
 
-    if (!isOrgOwnerOrAdmin && !isTeamLeader) {
+    const activeOrg = await auth.api.getFullOrganization({
+      headers: request.headers,
+    });
+
+    const userOrgMember = activeOrg?.members?.find(
+      (m: any) => m.userId === session.user.id
+    );
+
+    const isTeamLeader = teamMemberData?.role === "leader";
+    const isOrgAdmin =
+      userOrgMember?.role === "owner" || userOrgMember?.role === "admin";
+
+    if (!isTeamLeader && !isOrgAdmin) {
       return NextResponse.json(
-        { error: "Only org owners/admins or team leaders can update teams" },
+        { error: "Only team leaders and org admins can update team settings" },
         { status: 403 }
       );
     }
 
-    // Parse request body
-    const body = await request.json();
-    const { name, description } = body;
-
-    const updates: any = {
-      updatedAt: new Date(),
-    };
-
-    if (name) updates.name = name.trim();
-    if (description !== undefined)
-      updates.description = description?.trim() || null;
-
     // Update team
-    await db.update(team).set(updates).where(eq(team.id, teamId));
+    const updated = await db
+      .update(team)
+      .set({
+        name: name || teamData.name,
+        description:
+          description !== undefined ? description : teamData.description,
+        membersCanSeeUpdates:
+          membersCanSeeUpdates !== undefined
+            ? membersCanSeeUpdates
+            : teamData.membersCanSeeUpdates,
+        membersCanSeeInsights:
+          membersCanSeeInsights !== undefined
+            ? membersCanSeeInsights
+            : teamData.membersCanSeeInsights,
+        updatedAt: new Date(),
+      })
+      .where(eq(team.id, teamId))
+      .returning();
 
-    // Fetch updated team
-    const updatedTeam = await db.query.team.findFirst({
-      where: eq(team.id, teamId),
-      with: {
-        teamMembers: {
-          where: isNull(teamMember.deletedAt),
-          with: {
-            user: true,
-          },
-        },
-      },
-    });
-
-    return NextResponse.json({
-      team: updatedTeam,
-      message: "Team updated successfully",
-    });
+    return NextResponse.json(updated[0]);
   } catch (error) {
     console.error("Error updating team:", error);
     return NextResponse.json(
@@ -201,9 +146,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { teamId: string } }
+  { params }: { params: Promise<{ teamId: string }> }
 ) {
   try {
+    const { teamId } = await params;
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -211,8 +157,6 @@ export async function DELETE(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const teamId = params.teamId;
 
     // Get the team
     const teamData = await db.query.team.findFirst({
@@ -223,33 +167,26 @@ export async function DELETE(
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // Get user's org membership
+    // Check if user is org owner/admin
     const activeOrg = await auth.api.getFullOrganization({
       headers: request.headers,
     });
 
-    if (!activeOrg || activeOrg.id !== teamData.organizationId) {
-      return NextResponse.json(
-        { error: "Not authorized for this organization" },
-        { status: 403 }
-      );
-    }
-
-    // Check permissions - only org owners and admins can delete teams
-    const userOrgMember = activeOrg.members.find(
-      (m) => m.userId === session.user.id
+    const userOrgMember = activeOrg?.members?.find(
+      (m: any) => m.userId === session.user.id
     );
-    const canDelete =
+
+    const isOrgAdmin =
       userOrgMember?.role === "owner" || userOrgMember?.role === "admin";
 
-    if (!canDelete) {
+    if (!isOrgAdmin) {
       return NextResponse.json(
-        { error: "Only org owners and admins can delete teams" },
+        { error: "Only org admins can delete teams" },
         { status: 403 }
       );
     }
 
-    // Soft delete the team
+    // Soft delete team
     await db
       .update(team)
       .set({
@@ -258,9 +195,7 @@ export async function DELETE(
       })
       .where(eq(team.id, teamId));
 
-    return NextResponse.json({
-      message: "Team deleted successfully",
-    });
+    return NextResponse.json({ message: "Team deleted successfully" });
   } catch (error) {
     console.error("Error deleting team:", error);
     return NextResponse.json(

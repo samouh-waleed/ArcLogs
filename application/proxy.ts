@@ -1,3 +1,4 @@
+// middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "./lib/auth";
 
@@ -8,6 +9,7 @@ const publicRoutes = [
   "/api/auth",
   "/forgot-password",
   "/reset-password",
+  "/accept-invitation",
 ];
 
 // Routes that should redirect to app if already authenticated
@@ -16,19 +18,21 @@ const authRoutes = ["/login", "/signup"];
 // Routes that don't require an organization
 const noOrgRequiredRoutes = [
   "/create-organization",
+  "/accept-invitation",
   "/api/",
   "/login",
   "/signup",
 ];
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
 
   // Check if the route is public
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+  const isInvitationRoute = pathname.startsWith("/accept-invitation");
   const requiresOrg = !noOrgRequiredRoutes.some((route) =>
     pathname.startsWith(route)
   );
@@ -39,8 +43,8 @@ export async function proxy(request: NextRequest) {
       headers: request.headers,
     });
 
-    // If user is authenticated and trying to access auth pages, redirect to home
-    if (session && isAuthRoute) {
+    // If user is authenticated and trying to access auth pages (without redirect), redirect to home
+    if (session && isAuthRoute && !searchParams.get("redirect")) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
@@ -52,11 +56,11 @@ export async function proxy(request: NextRequest) {
     // If user is not authenticated and route is protected, redirect to login
     if (!session) {
       const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
+      loginUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
       return NextResponse.redirect(loginUrl);
     }
 
-    // User is authenticated - check if they have an organization using Better Auth
+    // User is authenticated - check organization requirements
     if (requiresOrg) {
       // Use Better Auth's listOrganizations to check if user has any orgs
       const organizations = await auth.api.listOrganizations({

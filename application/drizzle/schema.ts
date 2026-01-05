@@ -8,6 +8,7 @@ import {
   index,
   uniqueIndex,
   jsonb,
+  date,
 } from "drizzle-orm/pg-core";
 
 // ============================================
@@ -132,7 +133,7 @@ export const member = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // Role: 'owner' | 'member'
+    // Role: 'owner' | 'admin' | 'member'
     role: text("role").default("member").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -273,10 +274,43 @@ export const dailyQuestion = pgTable(
 
     // Soft delete
     deletedAt: timestamp("deleted_at"),
+
+    // ============================================
+    // SCHEDULING FIELDS
+    // ============================================
+
+    // Schedule type: 'daily' | 'weekly' | 'specific_dates' | 'custom'
+    scheduleType: text("schedule_type").default("daily").notNull(),
+
+    // Schedule configuration (JSONB for flexibility)
+    // Examples:
+    // daily: { "enabled": true }
+    // weekly: { "days": [1, 3, 5] } (0=Sunday, 6=Saturday)
+    // specific_dates: { "dates": ["2025-01-15", "2025-01-20"] }
+    // custom: { "pattern": "every_other_day", "start_date": "2025-01-01" }
+    scheduleConfig: jsonb("schedule_config").default({}).notNull(),
+
+    // Effective date range (optional)
+    effectiveFrom: date("effective_from"),
+    effectiveUntil: date("effective_until"),
+
+    // Active status (can be toggled on/off)
+    isActive: boolean("is_active").default(true).notNull(),
   },
   (table) => [
     index("daily_question_teamId_idx").on(table.teamId),
     index("daily_question_deletedAt_idx").on(table.deletedAt),
+    index("daily_question_schedule_idx").on(
+      table.teamId,
+      table.scheduleType,
+      table.isActive,
+      table.deletedAt
+    ),
+    index("daily_question_dates_idx").on(
+      table.teamId,
+      table.effectiveFrom,
+      table.effectiveUntil
+    ),
   ]
 );
 
