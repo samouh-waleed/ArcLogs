@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/send-standups",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/generate-digests",
+      "schedule": "0 18 * * *"
+    }
+  ]
+}

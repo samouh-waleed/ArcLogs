@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
+import { useUpdateSubscriptionSeats } from "@/hooks/useUpdateSubscriptionSeats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,9 +30,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   UserPlus,
   MoreVertical,
@@ -43,6 +56,9 @@ import {
   AlertCircle,
   Clock,
   X,
+  Slack,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -50,40 +66,72 @@ type Role = "owner" | "admin" | "member";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const updateSeats = useUpdateSubscriptionSeats();
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [error, setError] = useState("");
+  const [slackWorkspace, setSlackWorkspace] = useState<any>(null);
+  const [loadingSlack, setLoadingSlack] = useState(true);
 
   const { data: session } = authClient.useSession();
   const { data: activeOrg, isPending: isLoadingOrg } =
     authClient.useActiveOrganization();
 
-  // Use getFullOrganization with useQuery
+  // Get full organization with members
   const { data: fullOrg, isPending: isLoadingFullOrg } = useQuery({
     queryKey: ["organization-full", activeOrg?.id],
     queryFn: async () => {
-      const { data, error } =
-        await authClient.organization.getFullOrganization();
-      if (error) throw error;
+      if (!activeOrg?.id) return null;
+
+      const { data, error } = await authClient.organization.getFullOrganization(
+        {
+          query: {
+            organizationId: activeOrg.id,
+          },
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || "Failed to fetch organization");
+      }
+
       return data;
     },
     enabled: !!activeOrg?.id,
   });
 
-  // Use Better Auth's listInvitations
+  // Get invitations
   const { data: invitationsData, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ["invitations", activeOrg?.id],
     queryFn: async () => {
       const { data, error } = await authClient.organization.listInvitations();
       if (error) throw error;
-
       return data || [];
     },
     enabled: !!activeOrg?.id,
   });
 
-  // Filter to only pending invitations on the client side
+  // Load Slack workspace
+  useQuery({
+    queryKey: ["slack-workspace", activeOrg?.id],
+    queryFn: async () => {
+      if (!activeOrg?.id) return null;
+
+      const response = await fetch(
+        `/api/slack/workspace?orgId=${activeOrg.id}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSlackWorkspace(data.workspace);
+        return data.workspace;
+      }
+      setSlackWorkspace(null);
+      return null;
+    },
+    enabled: !!activeOrg?.id,
+  });
+
   const invitations = Array.isArray(invitationsData)
     ? invitationsData.filter((inv: any) => inv.status === "pending")
     : [];
@@ -95,7 +143,7 @@ export default function SettingsPage() {
   const isAdmin = currentUserMember?.role === "admin";
   const canManageMembers = isOwner || isAdmin;
 
-  // Use Better Auth's inviteMember
+  // Invite member mutation
   const inviteMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await authClient.organization.inviteMember({
@@ -112,21 +160,23 @@ export default function SettingsPage() {
       setInviteEmail("");
       setInviteRole("member");
       setError("");
+      // Update subscription seats
+      if (activeOrg?.id) {
+        updateSeats.mutate(activeOrg.id);
+      }
     },
     onError: (err: any) => {
       setError(err.message || "Failed to send invitation");
     },
   });
 
-  // Use Better Auth's cancelInvitation with optimistic update
+  // Cancel invitation mutation
   const cancelInvitationMutation = useMutation({
     mutationFn: async (invitationId: string) => {
       const { error } = await authClient.organization.cancelInvitation({
         invitationId,
       });
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       return invitationId;
     },
     onMutate: async (invitationId) => {
@@ -141,9 +191,7 @@ export default function SettingsPage() {
 
       queryClient.setQueryData(["invitations", activeOrg?.id], (old: any) => {
         if (Array.isArray(old)) {
-          const filtered = old.filter((inv: any) => inv.id !== invitationId);
-
-          return filtered;
+          return old.filter((inv: any) => inv.id !== invitationId);
         }
         return old;
       });
@@ -163,7 +211,7 @@ export default function SettingsPage() {
     },
   });
 
-  // Use Better Auth's removeMember
+  // Remove member mutation
   const removeMemberMutation = useMutation({
     mutationFn: async (memberIdOrEmail: string) => {
       const { error } = await authClient.organization.removeMember({
@@ -173,10 +221,14 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-full"] });
+      // Update subscription seats
+      if (activeOrg?.id) {
+        updateSeats.mutate(activeOrg.id);
+      }
     },
   });
 
-  // Use Better Auth's updateMemberRole
+  // Update member role mutation
   const updateRoleMutation = useMutation({
     mutationFn: async ({
       memberId,
@@ -193,6 +245,34 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-full"] });
+    },
+  });
+
+  // Disconnect Slack mutation
+  const disconnectSlackMutation = useMutation({
+    mutationFn: async () => {
+      if (!slackWorkspace?.id) throw new Error("No workspace to disconnect");
+
+      const response = await fetch(
+        `/api/slack/workspace/${slackWorkspace.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to disconnect Slack");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      setSlackWorkspace(null);
+      queryClient.invalidateQueries({ queryKey: ["slack-workspace"] });
+    },
+    onError: (err: any) => {
+      setError(err.message || "Failed to disconnect Slack");
     },
   });
 
@@ -249,6 +329,27 @@ export default function SettingsPage() {
     }
   };
 
+  const handleConnectSlack = () => {
+    if (!activeOrg?.id) return;
+
+    const slackAuthUrl = new URL("https://slack.com/oauth/v2/authorize");
+    slackAuthUrl.searchParams.set(
+      "client_id",
+      process.env.NEXT_PUBLIC_SLACK_CLIENT_ID!
+    );
+    slackAuthUrl.searchParams.set(
+      "scope",
+      "channels:read,chat:write,im:write,users:read,users:read.email"
+    );
+    slackAuthUrl.searchParams.set(
+      "redirect_uri",
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/slack/oauth`
+    );
+    slackAuthUrl.searchParams.set("state", activeOrg.id);
+
+    window.location.href = slackAuthUrl.toString();
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -257,6 +358,13 @@ export default function SettingsPage() {
           Manage your organization and team members
         </p>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Organization Info */}
       <Card>
@@ -279,6 +387,109 @@ export default function SettingsPage() {
               className="font-mono text-sm"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Slack Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Slack className="h-5 w-5" />
+            Slack Integration
+          </CardTitle>
+          <CardDescription>
+            Connect your Slack workspace for async standups
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {slackWorkspace ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-4 bg-green-50 border-green-200">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">
+                      {slackWorkspace.slackTeamName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Connected on{" "}
+                      {new Date(
+                        slackWorkspace.installedAt
+                      ).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConnectSlack}
+                  >
+                    Reconnect
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={disconnectSlackMutation.isPending}
+                      >
+                        Disconnect
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Disconnect Slack?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will stop all standup messages and remove the bot
+                          from your workspace. You can reconnect at any time.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => disconnectSlackMutation.mutate()}
+                          className="bg-destructive text-destructive-foreground"
+                        >
+                          Disconnect
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+
+              <Alert>
+                <Slack className="h-4 w-4" />
+                <AlertDescription>
+                  Disconnecting will stop all scheduled standups and remove the
+                  bot from your workspace.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Not Connected</p>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your Slack workspace to start
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={handleConnectSlack}>
+                  <Slack className="mr-2 h-4 w-4" />
+                  Connect Slack
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

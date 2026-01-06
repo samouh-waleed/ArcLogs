@@ -1,202 +1,182 @@
+// app/api/teams/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { team, teamMember } from "@/drizzle/schema";
-import { auth } from "@/lib/auth";
-import { nanoid } from "nanoid";
+import { team, member, subscription } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { nanoid } from "nanoid";
 
-export async function GET(request: NextRequest) {
+// Subscription limits
+const LIMITS = {
+  free: { teams: 1, membersPerTeam: 5, standups: 1 },
+  trialing: { teams: 999, membersPerTeam: 999, standups: 999 },
+  active: { teams: 999, membersPerTeam: 999, standups: 999 },
+};
+
+async function checkSubscriptionLimits(
+  organizationId: string,
+  type: "teams" | "members" | "standups",
+  currentCount: number
+) {
+  const subscriptions = await db.query.subscription.findMany({
+    where: eq(subscription.referenceId, organizationId),
+  });
+
+  const activeSubscription = subscriptions.find(
+    (sub: any) => sub.status === "active" || sub.status === "trialing"
+  );
+
+  const status = activeSubscription?.status || "free";
+  const limits = LIMITS[status as keyof typeof LIMITS] || LIMITS.free;
+
+  switch (type) {
+    case "teams":
+      return currentCount < limits.teams;
+    case "members":
+      return currentCount < limits.membersPerTeam;
+    case "standups":
+      return currentCount < limits.standups;
+    default:
+      return false;
+  }
+}
+
+export async function GET(req: NextRequest) {
   try {
     const session = await auth.api.getSession({
-      headers: request.headers,
+      headers: await headers(),
     });
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's active organization from Better Auth
-    const activeOrg = await auth.api.getFullOrganization({
-      headers: request.headers,
-    });
+    const { searchParams } = new URL(req.url);
+    const orgId = searchParams.get("orgId");
 
-    if (!activeOrg) {
+    if (!orgId) {
       return NextResponse.json(
-        { error: "No active organization" },
-        { status: 404 }
+        { error: "Organization ID required" },
+        { status: 400 }
       );
     }
 
-    // Check if user is owner or admin
-    const userMember = activeOrg.members.find(
-      (m) => m.userId === session.user.id
-    );
-    const isOwnerOrAdmin =
-      userMember?.role === "owner" || userMember?.role === "admin";
+    const membership = await db.query.member.findFirst({
+      where: and(
+        eq(member.organizationId, orgId),
+        eq(member.userId, session.user.id),
+        isNull(member.deletedAt)
+      ),
+    });
 
-    // Get teams based on role
-    let teams;
-    if (isOwnerOrAdmin) {
-      // Org owners/admins see all teams
-      teams = await db.query.team.findMany({
-        where: and(
-          eq(team.organizationId, activeOrg.id),
-          isNull(team.deletedAt),
-          isNull(team.archivedAt)
-        ),
-        with: {
-          teamMembers: {
-            where: isNull(teamMember.deletedAt),
-            with: {
-              user: true,
-            },
-          },
-        },
-        orderBy: (teams, { desc }) => [desc(teams.createdAt)],
-      });
-    } else {
-      // Regular members only see teams they're part of
-      const userTeamMemberships = await db.query.teamMember.findMany({
-        where: and(
-          eq(teamMember.userId, session.user.id),
-          isNull(teamMember.deletedAt)
-        ),
-        with: {
-          team: {
-            with: {
-              teamMembers: {
-                where: isNull(teamMember.deletedAt),
-                with: {
-                  user: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      teams = userTeamMemberships
-        .map((tm) => tm.team)
-        .filter(
-          (t) =>
-            t.organizationId === activeOrg.id && !t.deletedAt && !t.archivedAt
-        );
+    if (!membership) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    return NextResponse.json({ teams });
+    const teams = await db.query.team.findMany({
+      where: and(eq(team.organizationId, orgId), isNull(team.deletedAt)),
+      with: {
+        teamMembers: {
+          where: isNull(member.deletedAt),
+        },
+      },
+      orderBy: (team, { desc }) => [desc(team.createdAt)],
+    });
+
+    return NextResponse.json({
+      teams: teams.map((t) => ({
+        ...t,
+        memberCount: t.teamMembers.length,
+      })),
+    });
   } catch (error) {
     console.error("Error fetching teams:", error);
     return NextResponse.json(
-      { error: "Failed to fetch teams" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const session = await auth.api.getSession({
-      headers: request.headers,
+      headers: await headers(),
     });
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's active organization from Better Auth
-    const activeOrg = await auth.api.getFullOrganization({
-      headers: request.headers,
-    });
+    const body = await req.json();
+    const {
+      name,
+      description,
+      slackChannelId,
+      slackChannelName,
+      organizationId,
+    } = body;
 
-    if (!activeOrg) {
+    if (!name || !organizationId) {
       return NextResponse.json(
-        { error: "No active organization" },
-        { status: 404 }
+        { error: "Name and organizationId required" },
+        { status: 400 }
       );
     }
 
-    // Check permissions - only owners and admins can create teams
-    const userMember = activeOrg.members.find(
-      (m) => m.userId === session.user.id
-    );
-    const canCreateTeam =
-      userMember?.role === "owner" || userMember?.role === "admin";
+    const membership = await db.query.member.findFirst({
+      where: and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, session.user.id),
+        isNull(member.deletedAt)
+      ),
+    });
 
-    if (!canCreateTeam) {
+    if (
+      !membership ||
+      (membership.role !== "admin" && membership.role !== "owner")
+    ) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Check team limit
+    const existingTeams = await db.query.team.findMany({
+      where: and(
+        eq(team.organizationId, organizationId),
+        isNull(team.deletedAt)
+      ),
+    });
+
+    const canCreate = await checkSubscriptionLimits(
+      organizationId,
+      "teams",
+      existingTeams.length
+    );
+    if (!canCreate) {
       return NextResponse.json(
-        { error: "You don't have permission to create teams" },
+        { error: "Team limit reached. Please upgrade your subscription." },
         { status: 403 }
       );
     }
 
-    // Parse request body
-    const body = await request.json();
-    const { name, description } = body;
+    const [newTeam] = await db
+      .insert(team)
+      .values({
+        id: nanoid(),
+        name,
+        description: description || null,
+        organizationId,
+        slackChannelId: slackChannelId || null,
+        slackChannelName: slackChannelName || null,
+      })
+      .returning();
 
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Team name is required" },
-        { status: 400 }
-      );
-    }
-
-    if (name.length > 100) {
-      return NextResponse.json(
-        { error: "Team name must be 100 characters or less" },
-        { status: 400 }
-      );
-    }
-
-    // Create team and add creator as leader
-    const teamId = nanoid();
-    const teamMemberId = nanoid();
-
-    await db.transaction(async (tx) => {
-      // Create team
-      await tx.insert(team).values({
-        id: teamId,
-        name: name.trim(),
-        description: description?.trim() || null,
-        organizationId: activeOrg.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      // Add creator as team leader
-      await tx.insert(teamMember).values({
-        id: teamMemberId,
-        teamId,
-        userId: session.user.id,
-        role: "leader",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    });
-
-    // Fetch the created team
-    const newTeam = await db.query.team.findFirst({
-      where: eq(team.id, teamId),
-      with: {
-        teamMembers: {
-          where: isNull(teamMember.deletedAt),
-          with: {
-            user: true,
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(
-      {
-        team: newTeam,
-        message: "Team created successfully",
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({ team: newTeam }, { status: 201 });
   } catch (error) {
     console.error("Error creating team:", error);
     return NextResponse.json(
-      { error: "Failed to create team" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

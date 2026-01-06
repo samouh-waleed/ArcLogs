@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -27,9 +28,23 @@ import {
   Shield,
   Github,
   Chrome,
+  LogOut,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -41,26 +56,23 @@ export default function ProfilePage() {
   const { data: session, isPending: isLoadingSession } =
     authClient.useSession();
 
-  // Detect OAuth users more reliably
+  // Detect OAuth users
   const isOAuthUser =
     session?.user &&
-    // Check if user has OAuth accounts
     ((session.user as any).accounts?.some(
       (account: any) => account.providerId !== "credential"
     ) ||
-      // Or check if they don't have a password (social login only)
       !(session.user as any).accounts?.some(
         (account: any) => account.password
       ));
 
-  // Initialize form with session data
   useEffect(() => {
     if (session?.user) {
       setName(session.user.name || "");
     }
   }, [session?.user]);
 
-  // Update profile mutation (name only)
+  // Update profile mutation
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await authClient.updateUser({
@@ -77,7 +89,6 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["session"] });
       setSuccess("Profile updated successfully");
       setError("");
-
       setTimeout(() => setSuccess(""), 3000);
     },
     onError: (err: Error) => {
@@ -86,7 +97,7 @@ export default function ProfilePage() {
     },
   });
 
-  // Change password mutation (only for email/password users)
+  // Change password mutation
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
       if (newPassword !== confirmPassword) {
@@ -115,7 +126,6 @@ export default function ProfilePage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-
       setTimeout(() => setSuccess(""), 3000);
     },
     onError: (err: Error) => {
@@ -124,7 +134,29 @@ export default function ProfilePage() {
     },
   });
 
-  // Get provider icon
+  // Sign out mutation
+  const signOutMutation = useMutation({
+    mutationFn: async () => {
+      await authClient.signOut();
+    },
+    onSuccess: () => {
+      router.push("/login");
+    },
+  });
+
+  // Sign out all devices mutation
+  const signOutAllMutation = useMutation({
+    mutationFn: async () => {
+      await authClient.signOut({
+        fetchOptions: {
+          onSuccess: () => {
+            router.push("/login");
+          },
+        },
+      });
+    },
+  });
+
   const getProviderIcon = (providerId: string) => {
     switch (providerId) {
       case "github":
@@ -152,7 +184,6 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground">Manage your account settings</p>
         </div>
-
         <Card>
           <CardContent className="py-12 text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -168,7 +199,6 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
         <p className="text-muted-foreground">
@@ -176,7 +206,6 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      {/* Success/Error Messages */}
       {success && (
         <Alert className="bg-green-50 border-green-200">
           <CheckCircle className="h-4 w-4 text-green-600" />
@@ -200,7 +229,6 @@ export default function ProfilePage() {
           <CardDescription>Update your account details</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* User Avatar */}
           <div className="flex items-center gap-4">
             <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
               <span className="text-2xl font-bold text-white">
@@ -217,7 +245,6 @@ export default function ProfilePage() {
 
           <Separator />
 
-          {/* Name Field */}
           <div className="space-y-2">
             <Label htmlFor="name">
               <User className="inline h-4 w-4 mr-2" />
@@ -232,7 +259,6 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Email Field (Read-only) */}
           <div className="space-y-2">
             <Label htmlFor="email">
               <Mail className="inline h-4 w-4 mr-2" />
@@ -268,7 +294,6 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {/* Account Created Date */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <span>
@@ -298,7 +323,7 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Connected Accounts - For OAuth users */}
+      {/* Connected Accounts */}
       {isOAuthUser && (
         <Card>
           <CardHeader>
@@ -353,7 +378,7 @@ export default function ProfilePage() {
         </Card>
       )}
 
-      {/* Security Settings - Only for email/password users */}
+      {/* Security Settings */}
       {!isOAuthUser && (
         <Card>
           <CardHeader>
@@ -428,7 +453,7 @@ export default function ProfilePage() {
         </Card>
       )}
 
-      {/* Account Sessions */}
+      {/* Active Sessions */}
       <Card>
         <CardHeader>
           <CardTitle>Active Sessions</CardTitle>
@@ -436,7 +461,7 @@ export default function ProfilePage() {
             Manage your active sessions across devices
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="rounded-lg border p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -449,9 +474,52 @@ export default function ProfilePage() {
               <div className="h-2 w-2 rounded-full bg-green-500" />
             </div>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Session management coming soon
-          </p>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => signOutMutation.mutate()}
+              disabled={signOutMutation.isPending}
+            >
+              {signOutMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
+              Sign Out
+            </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={signOutAllMutation.isPending}
+                >
+                  Sign Out All Devices
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Sign out all devices?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will sign you out of all active sessions on all
+                    devices. You'll need to sign in again on each device.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => signOutAllMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground"
+                  >
+                    Sign Out All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
 
@@ -464,9 +532,13 @@ export default function ProfilePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Account deletion coming soon
-          </p>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Account deletion is not yet available. Contact support if you need
+              to delete your account.
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     </div>
