@@ -1,11 +1,11 @@
 import React from 'react';
 
-import ZippayContactForm from '@/components/sections/zippay-contact-form';
+import ContactForm from '@/components/sections/contact-form';
 
 const page = () => {
   return (
     <>
-      <ZippayContactForm />
+      <ContactForm />
     </>
   );
 };

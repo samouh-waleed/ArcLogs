@@ -25,36 +25,37 @@ export type ZippayFAQProps = {
   softBg?: boolean;
 };
 
+// UPDATED: ArcLogs specific questions
 const DEFAULT_ITEMS: FaqItem[] = [
   {
-    question: 'What is Zippay?',
+    question: 'How does ArcLogs differ from a regular standup?',
     answer:
-      'Zippay is an AP platform that streamlines invoice intake, approvals, and payments—reducing manual work and errors.',
+      'ArcLogs replaces the 15-minute live meeting with async voice or text updates. This saves your team hours per week, creates a searchable history, and lets deep work happen uninterrupted.',
   },
   {
-    question: 'How does Zippay’s global corporate card work?',
+    question: 'How does the AI blocker detection work?',
     answer:
-      'Issue cards in seconds, set policy controls, and get real-time visibility across currencies with automatic reconciliation.',
+      'Our AI analyzes daily updates for language indicating hurdles (e.g., "waiting on API," "blocked by"). It automatically tags these as blockers and surfaces them in the dashboard so leads can intervene immediately.',
   },
   {
-    question: 'How secure is my financial data with Zippay?',
+    question: 'Does ArcLogs integrate with our existing tools?',
     answer:
-      'We use robust encryption, strict access controls, and frequent audits to safeguard your data to the highest standards.',
+      'Yes. ArcLogs pushes summaries and alerts directly to Slack, Jira, and GitHub, ensuring your team stays in sync without leaving the tools they already use.',
   },
   {
-    question: 'Is Zippay suitable for businesses of all sizes?',
+    question: 'Can I use ArcLogs for non-engineering teams?',
     answer:
-      'Yes—from startups to enterprises, Zippay scales to your team with flexible controls and integrations.',
+      'While optimized for engineering workflows, ArcLogs is excellent for product, design, and marketing teams that want to maintain alignment without the calendar clutter.',
   },
 ];
 
 export default function ZippayFAQ({
-  tagline = 'FAQs',
-  title = 'Frequently Asked Questions',
-  description = 'Find answers to common queries and get the information you need quickly and easily.',
+  tagline = 'Support', // Changed from FAQs
+  title = 'Questions? We’ve got answers.', // More conversational title
+  description = 'Everything you need to know about switching your team to asynchronous standups.', // ArcLogs specific description
   items = DEFAULT_ITEMS,
-  ctaHref = '/faq',
-  ctaLabel = 'See All FAQs',
+  ctaHref = '/contact', // Changed to contact for now, or '/faq' if you build that page
+  ctaLabel = 'Contact Support',
   className,
   softBg,
 }: ZippayFAQProps) {

@@ -7,195 +7,53 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  --background: var(--gray-0);
-  --foreground: var(--gray-900);
-  --card: var(--gray-0);
-  --card-foreground: var(--gray-900);
-  --popover: var(--gray-0);
-  --popover-foreground: var(--gray-900);
-  --primary: var(--primary-100);
-  --primary-foreground: var(--gray-0);
-  --secondary: var(--secondary-100);
-  --secondary-foreground: var(--gray-900);
-  --muted: var(--gray-50);
-  --muted-foreground: var(--gray-400);
-  --accent: var(--primary-25);
-  --accent-foreground: var(--gray-900);
-  --destructive: var(--error-100);
-  --destructive-foreground: var(--gray-0);
-  --border: var(--gray-50);
-  --input: var(--gray-200);
-  --ring: var(--emerald-400);
+:root, .dark {
+  /* Core Palette */
+  --white: oklch(100% 0 0);
+  --black: oklch(0% 0 0);
+  /* Arc Logs Brand Blue (#0066FF) */
+  --brand-blue: oklch(55% 0.25 260); 
+  --brand-blue-hover: oklch(45% 0.25 260);
 
-  /* Charts */
-  --chart-1: var(--primary-100);
-  --chart-2: var(--secondary-200);
-  --chart-3: var(--aqua-100);
-  --chart-4: var(--warning-100);
-  --chart-5: var(--success-100);
+  /* Semantic Variables */
+  --background: var(--white);
+  --foreground: var(--black);
+  
+  --card: var(--white);
+  --card-foreground: var(--black);
+  
+  --popover: var(--white);
+  --popover-foreground: var(--black);
+  
+  /* Primary is now our Blue */
+  --primary: var(--brand-blue);
+  --primary-foreground: var(--white);
+  
+  /* Secondary is Black for high contrast */
+  --secondary: var(--black);
+  --secondary-foreground: var(--white);
+  
+  --muted: oklch(96% 0 0); /* Light gray */
+  --muted-foreground: oklch(45% 0 0);
+  
+  --accent: var(--brand-blue);
+  --accent-foreground: var(--white);
+  
+  --destructive: oklch(52% 0.2 20); /* Standard Error Red */
+  --destructive-foreground: var(--white);
+  
+  --border: oklch(90% 0 0); /* Subtle gray border */
+  --input: oklch(90% 0 0);
+  --ring: var(--brand-blue);
 
-  /* Tailwind Color Overrides */
-  --gray-0: oklch(100% 0 0); /* #FFFFFF */
-  --gray-25: oklch(98.04% 0 0); /* #FAFAFA */
-  --gray-50: oklch(96.08% 0 0); /* #F5F5F5 */
-  --gray-100: oklch(89.8% 0 0); /* #E5E5E5 */
-  --gray-200: oklch(83.14% 0 0); /* #D4D4D4 */
-  --gray-300: oklch(63.92% 0 0); /* #A3A3A3 */
-  --gray-400: oklch(45.1% 0 0); /* #737373 */
-  --gray-500: oklch(32.16% 0 0); /* #525252 */
-  --gray-600: oklch(25.1% 0 0); /* #404040 */
-  --gray-700: oklch(14.9% 0 0); /* #262626 */
-  --gray-800: oklch(9.02% 0 0); /* #171717 */
-  --gray-900: oklch(3.92% 0 0); /* #0A0A0A */
-
-  --emerald-50: oklch(97.24% 0.026 175.59);
-  --emerald-100: oklch(94.89% 0.051 173.35);
-  --emerald-200: oklch(90.38% 0.099 170.58);
-  --emerald-300: oklch(81.4 45.75% 160.372);
-  --emerald-400: oklch(55.67% 0.123 161.49);
-  --emerald-500: oklch(34.54% 0.074 163.15);
-
-  /* Custom Colors */
-  --primary-0: oklch(0.96 0.037 162.4); /* #E5FCF5 */
-  --primary-25: oklch(0.92 0.067 158.7); /* #CCFAEB */
-  --primary-50: oklch(0.84 0.124 158.2); /* #99F5D6 */
-  --primary-100: oklch(0.81 0.182 160); /* #00E599 */
-  --primary-200: oklch(0.6 0.164 159.8); /* #00B77A */
-  --primary-300: oklch(0.35 0.098 159.8); /* #005C3D */
-
-  --secondary-0: oklch(97.65% 0.014 285.6); /* #F6F5FF */
-  --secondary-25: oklch(92.94% 0.039 285.6); /* #E3E0FF */
-  --secondary-50: oklch(85.88% 0.078 285.6); /* #C7C2FF */
-  --secondary-100: oklch(77.65% 0.115 285.6); /* #A199FF */
-  --secondary-200: oklch(52.16% 0.092 285.6); /* #645CC6 */
-  --secondary-300: oklch(35.69% 0.102 285.6); /* #372E9B */
-
-  --warning-0: oklch(96.47% 0.024 85.9); /* #FFF6E0 */
-  --warning-25: oklch(91.37% 0.054 85.9); /* #F9ECCB */
-  --warning-50: oklch(80.39% 0.124 85.9); /* #FBD982 */
-  --warning-100: oklch(75.69% 0.157 75.2); /* #FFBD4C */
-  --warning-200: oklch(42.16% 0.078 65.4); /* #956321 */
-  --warning-300: oklch(28.63% 0.058 62.1); /* #5B3D1E */
-
-  --error-0: oklch(95.29% 0.021 6.8); /* #FEEFF2 */
-  --error-25: oklch(88.63% 0.054 6.8); /* #FADAE1 */
-  --error-50: oklch(68.24% 0.137 6.8); /* #ED8296 */
-  --error-100: oklch(52.55% 0.197 6.8); /* #DF1C41 */
-  --error-200: oklch(34.51% 0.124 6.8); /* #95122B */
-  --error-300: oklch(26.27% 0.095 6.8); /* #710E21 */
-
-  --success-0: oklch(96.86% 0.021 172.4); /* #EFFEFA */
-  --success-25: oklch(89.02% 0.034 172.4); /* #DDF2EE */
-  --success-50: oklch(78.43% 0.078 172.4); /* #9DE0D3 */
-  --success-100: oklch(65.49% 0.102 172.4); /* #40C4AA */
-  --success-200: oklch(42.75% 0.065 172.4); /* #287F6E */
-  --success-300: oklch(26.67% 0.041 172.4); /* #174E43 */
-
-  --aqua-0: oklch(96.08% 0.018 195.8); /* #EEFAFC */
-  --aqua-25: oklch(88.24% 0.054 195.8); /* #D1F0F9 */
-  --aqua-50: oklch(82.35% 0.078 195.8); /* #BAE9F3 */
-  --aqua-100: oklch(69.02% 0.124 195.8); /* #52C9E0 */
-  --aqua-200: oklch(55.29% 0.078 195.8); /* #42A2B5 */
-  --aqua-300: oklch(29.41% 0.041 195.8); /* #22555F */
-}
-
-.dark {
-  --background: var(--gray-100);
-  --foreground: var(--gray-900);
-
-  --card: var(--gray-25);
-  --card-foreground: var(--gray-900);
-
-  --popover: var(--gray-25);
-  --popover-foreground: var(--gray-900);
-
-  --primary: var(--primary-100);
-  --primary-foreground: var(--gray-0);
-
-  --secondary: var(--secondary-100);
-  --secondary-foreground: var(--gray-0);
-
-  --muted: var(--gray-50);
-  --muted-foreground: var(--gray-400);
-
-  --accent: var(--primary-25);
-  --accent-foreground: var(--gray-900);
-
-  --destructive: var(--error-100);
-  --destructive-foreground: var(--gray-0);
-
-  --border: oklch(100% 0 0 / 0.12);
-  --input: var(--gray-50);
-  --ring: var(--emerald-400);
-
-  --chart-1: var(--primary-100);
-  --chart-2: var(--secondary-200);
-  --chart-3: var(--aqua-100);
-  --chart-4: var(--warning-100);
-  --chart-5: var(--success-100);
-
-  --gray-0: oklch(8% 0 0);
-  --gray-25: oklch(12% 0 0);
-  --gray-50: oklch(16% 0 0);
-  --gray-100: oklch(25% 0 0);
-  --gray-200: oklch(33% 0 0);
-  --gray-300: oklch(45% 0 0);
-  --gray-400: oklch(64% 0 0);
-  --gray-500: oklch(83% 0 0);
-  --gray-600: oklch(90% 0 0);
-  --gray-700: oklch(96% 0 0);
-  --gray-800: oklch(98% 0 0);
-  --gray-900: oklch(100% 0 0);
-
-  --emerald-50: oklch(22% 0.02 175.6);
-  --emerald-100: oklch(28% 0.036 173.3);
-  --emerald-200: oklch(40% 0.07 170.6);
-  --emerald-300: oklch(50% 0.095 161);
-  --emerald-400: oklch(62% 0.105 161.5);
-  --emerald-500: oklch(70% 0.08 163.1);
-
-  --primary-0: oklch(18% 0.02 160);
-  --primary-25: oklch(25% 0.04 160);
-  --primary-50: oklch(40% 0.07 160);
-  --primary-100: oklch(60% 0.11 160);
-  --primary-200: oklch(55% 0.1 160);
-  --primary-300: oklch(75% 0.13 160);
-
-  --secondary-0: oklch(24% 0.022 285.6);
-  --secondary-25: oklch(30% 0.04 285.6);
-  --secondary-50: oklch(40% 0.065 285.6);
-  --secondary-100: oklch(74% 0.13 285.6);
-  --secondary-200: oklch(68% 0.115 285.6);
-  --secondary-300: oklch(60% 0.1 285.6);
-
-  --warning-0: oklch(14% 0.018 85.9);
-  --warning-25: oklch(20% 0.038 85.9);
-  --warning-50: oklch(30% 0.08 85.9);
-  --warning-100: oklch(64% 0.12 75.2);
-  --warning-200: oklch(46% 0.085 65.4);
-  --warning-300: oklch(34% 0.07 62.1);
-
-  --error-0: oklch(14% 0.016 6.8);
-  --error-25: oklch(22% 0.04 6.8);
-  --error-50: oklch(34% 0.09 6.8);
-  --error-100: oklch(58% 0.16 6.8);
-  --error-200: oklch(42% 0.11 6.8);
-  --error-300: oklch(30% 0.085 6.8);
-
-  --success-0: oklch(14% 0.016 172.4);
-  --success-25: oklch(22% 0.026 172.4);
-  --success-50: oklch(34% 0.06 172.4);
-  --success-100: oklch(56% 0.095 172.4);
-  --success-200: oklch(42% 0.06 172.4);
-  --success-300: oklch(30% 0.04 172.4);
-
-  --aqua-0: oklch(14% 0.012 195.8);
-  --aqua-25: oklch(22% 0.032 195.8);
-  --aqua-50: oklch(30% 0.05 195.8);
-  --aqua-100: oklch(58% 0.1 195.8);
-  --aqua-200: oklch(46% 0.07 195.8);
-  --aqua-300: oklch(32% 0.045 195.8);
+  /* Overriding your existing gray scale for maximum clarity */
+  --gray-0: var(--white);
+  --gray-900: var(--black);
+  
+  /* Setting the primary scale to Blue for Tailwind utilities */
+  --primary-100: var(--brand-blue);
+  --primary-200: var(--brand-blue-hover);
+  --primary-300: oklch(25% 0.1 260); /* Very dark blue */
 }
 
 @theme inline {

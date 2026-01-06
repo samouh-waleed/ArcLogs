@@ -31,44 +31,41 @@ const satoshi = localFont({
 });
 export const metadata: Metadata = {
   title: {
-    default: 'Zippay - Modern Next.js Template',
-    template: '%s | Zippay',
+    default: 'ArcLogs - Async Standups for Engineering Teams',
+    template: '%s | ArcLogs',
   },
   description:
-    'A modern, fully featured Next.js template built with Shadcn/UI, TailwindCSS and TypeScript, perfect for your next web application.',
+    'Eliminate daily meetings with async voice and text updates. Save 5+ hours per week while keeping your engineering team aligned.',
   keywords: [
-    'Next.js',
-    'React',
-    'JavaScript',
-    'TypeScript',
-    'TailwindCSS',
-    'Template',
-    'Shadcn/UI',
-    'Web Development',
+    'ArcLogs',
+    'Async Standups',
+    'Engineering Management',
+    'Remote Teams',
+    'AI Status Updates',
+    'Developer Productivity',
   ],
-  authors: [{ name: 'Zippay Team' }],
-  creator: 'Zippay Team',
-  publisher: 'Zippay',
+  authors: [{ name: 'ArcLogs Team' }],
+  creator: 'ArcLogs Team',
+  publisher: 'ArcLogs Team',
   robots: {
     index: true,
     follow: true,
   },
   icons: {
     icon: [
-      { url: '/favicon/favicon.ico', sizes: '48x48' },
-      { url: '/favicon/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
-      { url: '/favicon/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon/favicon.ico' },
+      { url: '/images/layout/image.png', sizes: '32x32' },
+      { url: '/images/layout/image.png', sizes: 'any' }, // Fallback
     ],
-    apple: [{ url: '/favicon/apple-touch-icon.png', sizes: '180x180' }],
-    shortcut: [{ url: '/favicon/favicon.ico' }],
+    apple: [
+      { url: '/images/layout/image.png', sizes: '180x180' }
+    ],
+    shortcut: [{ url: '/images/layout/image.png' }],
   },
   openGraph: {
-    title: 'Zippay - Modern Next.js Template',
-    description:
-      'A modern, fully featured Next.js template built with Shadcn/UI, TailwindCSS and TypeScript, perfect for your next web application.',
-    siteName: 'Zippay',
+      title: 'ArcLogs - Skip the Standup, Keep the Alignment',
+      description:
+        'The intelligence layer for technical workspaces that converts async updates into actionable insights.',
+      siteName: 'ArcLogs',
     images: [
       {
         url: '/og-image.jpg',
@@ -79,13 +76,11 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Zippay - Modern Next.js Template',
-    description:
-      'A modern, fully featured Next.js template built with Shadcn/UI, TailwindCSS and TypeScript, perfect for your next web application.',
-    images: ['/og-image.jpg'],
-    creator: '@zippay',
-  },
+      card: 'summary_large_image',
+      title: 'ArcLogs - Async Standups',
+      description: 'Eliminate meetings. Keep alignment.',
+      creator: '@arclogs',
+    },
 };
 
 export default function RootLayout({

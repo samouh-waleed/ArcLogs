@@ -1,18 +1,20 @@
-import ZippayContentsSection from '@/components/sections/zippay-contents-section';
 import ZippayCtaSection from '@/components/sections/zippay-cta-section';
-import ZippayFeatureQuad from '@/components/sections/zippay-feature-quad';
-import ZippayFeaturesSection from '@/components/sections/zippay-features-section';
-import ZippayHero from '@/components/sections/zippay-hero';
-import ZippayTestimonialsSection from '@/components/sections/zippay-testimonials-section';
+import FeaturesSection from '@/components/sections/features-section';
+import ZippayHero from '@/components/sections/hero';
+import ArcLogsFeatureQuad from '@/components/sections/ArcLogsFeatureQuad';
+import HowItWorksSection from '@/components/sections/HowItWorksSection';
+// Import your newly created section
+import InsightsSection from '@/components/sections/InsightsSection';
 
 export default function Home() {
   return (
     <>
       <ZippayHero />
-      <ZippayFeaturesSection />
-      <ZippayContentsSection />
-      <ZippayFeatureQuad />
-      <ZippayTestimonialsSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      {/* Replaces the old Sync section with the new instructional Insights section */}
+      <InsightsSection />
+      <ArcLogsFeatureQuad />
       <ZippayCtaSection />
     </>
   );

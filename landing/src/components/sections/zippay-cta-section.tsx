@@ -16,13 +16,12 @@ type CTAProps = {
 };
 
 export default function ZippayCtaSection({
-  title = 'A Better Way to Manage Your Money',
-  description = `Zippay enables you to achieve clarity and significant results on a large scale by
-linking tasks and workflows to the overarching objectives of the company`,
-  primaryHref = '/pricing',
-  primaryLabel = 'Get Started',
-  secondaryHref = '/faq',
-  secondaryLabel = 'Why Zippay',
+  // NEW CONTENT: Focus on getting them to start now
+  title = 'Ready to reclaim your time?',
+  description = `Join engineering teams that have switched to ArcLogs and stopped wasting hours in meetings.`,
+  primaryHref = '/signup',
+  primaryLabel = 'Get Started', 
+  // secondary props are no longer used
   patternSrc = '/images/homepage/cta/pattern.webp',
 }: CTAProps) {
   return (
@@ -55,9 +54,7 @@ linking tasks and workflows to the overarching objectives of the company`,
             <Link href={primaryHref}>{primaryLabel}</Link>
           </Button>
 
-          <Button asChild variant="translucent" className="w-full sm:w-auto">
-            <Link href={secondaryHref}>{secondaryLabel}</Link>
-          </Button>
+          {/* REMOVED: Secondary "See How It Works" Button */}
         </div>
       </div>
     </section>
