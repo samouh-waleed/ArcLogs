@@ -1,0 +1,454 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
+
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+:root, .dark {
+  /* Core Palette */
+  --white: oklch(100% 0 0);
+  --black: oklch(0% 0 0);
+  /* Arc Logs Brand Blue (#0066FF) */
+  --brand-blue: oklch(55% 0.25 260); 
+  --brand-blue-hover: oklch(45% 0.25 260);
+
+  /* Semantic Variables */
+  --background: var(--white);
+  --foreground: var(--black);
+  
+  --card: var(--white);
+  --card-foreground: var(--black);
+  
+  --popover: var(--white);
+  --popover-foreground: var(--black);
+  
+  /* Primary is now our Blue */
+  --primary: var(--brand-blue);
+  --primary-foreground: var(--white);
+  
+  /* Secondary is Black for high contrast */
+  --secondary: var(--black);
+  --secondary-foreground: var(--white);
+  
+  --muted: oklch(96% 0 0); /* Light gray */
+  --muted-foreground: oklch(45% 0 0);
+  
+  --accent: var(--brand-blue);
+  --accent-foreground: var(--white);
+  
+  --destructive: oklch(52% 0.2 20); /* Standard Error Red */
+  --destructive-foreground: var(--white);
+  
+  --border: oklch(90% 0 0); /* Subtle gray border */
+  --input: oklch(90% 0 0);
+  --ring: var(--brand-blue);
+
+  /* Overriding your existing gray scale for maximum clarity */
+  --gray-0: var(--white);
+  --gray-900: var(--black);
+  
+  /* Setting the primary scale to Blue for Tailwind utilities */
+  --primary-100: var(--brand-blue);
+  --primary-200: var(--brand-blue-hover);
+  --primary-300: oklch(25% 0.1 260); /* Very dark blue */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-satoshi: var(--font-satoshi);
+
+  /* full scales → Tailwind utilities (text-*, bg-*, border-*) */
+  --color-primary-0: var(--primary-0);
+  --color-primary-25: var(--primary-25);
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+
+  --color-secondary-0: var(--secondary-0);
+  --color-secondary-25: var(--secondary-25);
+  --color-secondary-50: var(--secondary-50);
+  --color-secondary-100: var(--secondary-100);
+  --color-secondary-200: var(--secondary-200);
+  --color-secondary-300: var(--secondary-300);
+
+  --color-gray-0: var(--gray-0);
+  --color-gray-25: var(--gray-25);
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
+
+  --color-warning-0: var(--warning-0);
+  --color-warning-25: var(--warning-25);
+  --color-warning-50: var(--warning-50);
+  --color-warning-100: var(--warning-100);
+  --color-warning-200: var(--warning-200);
+  --color-warning-300: var(--warning-300);
+
+  --color-error-0: var(--error-0);
+  --color-error-25: var(--error-25);
+  --color-error-50: var(--error-50);
+  --color-error-100: var(--error-100);
+  --color-error-200: var(--error-200);
+  --color-error-300: var(--error-300);
+
+  --color-success-0: var(--success-0);
+  --color-success-25: var(--success-25);
+  --color-success-50: var(--success-50);
+  --color-success-100: var(--success-100);
+  --color-success-200: var(--success-200);
+  --color-success-300: var(--success-300);
+
+  --color-aqua-0: var(--aqua-0);
+  --color-aqua-25: var(--aqua-25);
+  --color-aqua-50: var(--aqua-50);
+  --color-aqua-100: var(--aqua-100);
+  --color-aqua-200: var(--aqua-200);
+  --color-aqua-300: var(--aqua-300);
+
+  /* extras */
+  --spacing-9xl: 100rem;
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-marquee: marquee 25s linear infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes marquee {
+    0% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+}
+
+/* --------------------------
+   Container util (kept)
+--------------------------- */
+@utility container {
+  margin-inline: auto;
+  max-width: 100%;
+  @media (min-width: 1200px) {
+    max-width: 1200px;
+  }
+}
+
+/* --------------------------
+   Base (no border-border)
+--------------------------- */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    /* keep v3-like default without relying on a utility class name */
+    border-color: var(--color-border);
+  }
+  /* If you want a default 1px border everywhere, uncomment:
+  * { @apply border; }
+  */
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* --------------------------
+   Typography utilities
+--------------------------- */
+@layer utilities {
+  /* Base font family */
+  body,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      var(--font-satoshi),
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      Segoe UI,
+      Roboto,
+      Helvetica,
+      Arial,
+      'Apple Color Emoji',
+      'Segoe UI Emoji';
+  }
+
+  /* Headings */
+  .heading-1 {
+    font-size: 48px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .heading-2 {
+    font-size: 40px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .heading-3 {
+    font-size: 32px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  .heading-4 {
+    font-size: 24px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+  .heading-5 {
+    font-size: 20px;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+  .heading-6 {
+    font-size: 18px;
+    line-height: 1.4;
+    font-weight: 700;
+  }
+
+  /* Body Large (18px) */
+  .body-lg-bold {
+    font-size: 18px;
+    line-height: 1.6;
+    font-weight: 700;
+  }
+  .body-lg-medium {
+    font-size: 18px;
+    line-height: 1.6;
+    font-weight: 500;
+  }
+  .body-lg {
+    font-size: 18px;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+
+  /* Body Medium (16px) */
+  .body-md-bold {
+    font-size: 16px;
+    line-height: 1.65;
+    font-weight: 700;
+  }
+  .body-md-medium {
+    font-size: 16px;
+    line-height: 1.65;
+    font-weight: 500;
+  }
+  .body-md {
+    font-size: 16px;
+    line-height: 1.65;
+    font-weight: 400;
+  }
+
+  /* Body Small (14px) */
+  .body-sm-bold {
+    font-size: 14px;
+    line-height: 1.7;
+    font-weight: 700;
+  }
+  .body-sm-medium {
+    font-size: 14px;
+    line-height: 1.7;
+    font-weight: 500;
+  }
+  .body-sm {
+    font-size: 14px;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+
+  /* Body X-Small (12px) */
+  .body-xs-bold {
+    font-size: 12px;
+    line-height: 1.7;
+    font-weight: 700;
+  }
+  .body-xs-medium {
+    font-size: 12px;
+    line-height: 1.7;
+    font-weight: 500;
+  }
+  .body-xs {
+    font-size: 12px;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+}
+
+/* --------------------------
+   Components (no border-border)
+--------------------------- */
+@layer components {
+  button {
+    cursor: pointer;
+  }
+  /* Ensure any element with a border-* class gets the right color */
+  [class*='border'] {
+    border-color: var(--color-border);
+  }
+}
+
+body {
+  position: relative;
+}
+
+/* ---- Typography as Tailwind utilities (responsive-ready) ---- */
+@utility text-heading-1 {
+  font-size: 48px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+@utility text-heading-2 {
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+@utility text-heading-3 {
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+@utility text-heading-4 {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+@utility text-heading-5 {
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+@utility text-heading-6 {
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+/* Body Large (18px) */
+@utility text-body-lg {
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+@utility text-body-lg-medium {
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 500;
+}
+@utility text-body-lg-bold {
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+/* Body Medium (16px) */
+@utility text-body-md {
+  font-size: 16px;
+  line-height: 1.65;
+  font-weight: 400;
+}
+@utility text-body-md-medium {
+  font-size: 16px;
+  line-height: 1.65;
+  font-weight: 500;
+}
+@utility text-body-md-bold {
+  font-size: 16px;
+  line-height: 1.65;
+  font-weight: 700;
+}
+
+/* Body Small (14px) */
+@utility text-body-sm {
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+@utility text-body-sm-medium {
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 500;
+}
+@utility text-body-sm-bold {
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 700;
+}
+
+/* Body X-Small (12px) */
+@utility text-body-xs {
+  font-size: 12px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+@utility text-body-xs-medium {
+  font-size: 12px;
+  line-height: 1.7;
+  font-weight: 500;
+}
+@utility text-body-xs-bold {
+  font-size: 12px;
+  line-height: 1.7;
+  font-weight: 700;
+}

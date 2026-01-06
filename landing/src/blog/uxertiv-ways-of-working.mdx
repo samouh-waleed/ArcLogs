@@ -1,0 +1,43 @@
+---
+tagline: Teams
+title: How Uxertiv leverages Zappify to align on ways of working at scale
+intro: >
+  Uxertiv uses Zappify to codify rituals, automate status, and keep distributed squads rowing in the same direction — without more meetings.
+author: Omar Velasquez
+published: 2025-05-18
+featured: true
+---
+
+<small>5–7 minute read</small>
+
+## 1. Replace Status Meetings with Asynchronous Rituals
+
+- **Weekly async check-ins:** open automatically every Monday with three prompts.
+- **Roll-up views:** squad updates auto-compile into a portfolio dashboard.
+- **Decision logs:** approvals happen in-app and capture context, owner, and timestamp.
+
+**How to act**
+
+- Pilot with one squad for 2 sprints; retire two meetings to fund the experiment.
+- Use lightweight prompts: “What moved? What’s blocked? What’s next?”
+- Adopt a two-minute rule: skimmable updates win participation.
+
+> Tip: If it takes more than five minutes to write, it belongs in a doc — not a check-in.
+
+## 2. Guardrails Over Gatekeepers
+
+Templates set policy; automation enforces it so velocity and compliance can coexist.
+
+- **Approval matrices:** route by amount, risk, or customer tier.
+- **SLAs by type:** incidents get 1-hour reviews, experiments get 24 hours.
+- **Audit trail:** every approval and exception lives next to the work.
+
+```yaml
+approval:
+  spend <= 2k: SquadLead
+  2k < spend <= 25k: Director
+  > 25k: CFO
+sla:
+  incident: 1h
+  feature: 24h
+```

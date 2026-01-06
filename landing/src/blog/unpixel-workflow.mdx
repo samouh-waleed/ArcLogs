@@ -1,0 +1,43 @@
+---
+tagline: Industry Insight
+title: How Unpixel streamlined its project management workflow
+intro: >
+  Unpixel cut cycle time by 34% in eight weeks by standardising intake, automating handoffs, and giving teams real-time visibility across tools. Here's the playbook they used — and how you can adapt it to your stack.
+image: /images/blog/blog1.webp
+author: Claire Donovan, CFA
+published: 2025-06-24
+featured: true
+---
+
+<small>5–7 minute read</small>
+
+## 1. Standardise Intake and Definitions of Done
+
+Before: work arrived via chats, emails, and ad-hoc pings. After: **one intake form** creates a ticket with owner, due date, estimate, and a clear DoD.
+
+- **Single queue:** requests funnel into one backlog with tags (team, objective, priority).
+- **Duplicate control:** near-match detection bounces duplicate asks.
+- **DoD templates:** per-work-type checklists (e.g., blog, feature, bug) ensure consistent quality.
+
+**How to act**
+
+- Map your top 5 request types and write a crisp DoD for each.
+- Route _everything_ through the same form for 30 days; measure noise reduction.
+- Review bounced requests weekly to refine choices and language.
+
+> Tip: Don’t add tools first. Fix naming, states, and owners — then wire in automation.
+
+## 2. Automate Handoffs and Surface Flow
+
+Rules move tickets, attach templates, and ping the next owner so work never sits idle.
+
+- **Stage transitions:** moving to “Ready” triggers the right reviewers.
+- **SLAs:** if a ticket waits >24h in a column, the current owner gets nudged.
+- **Portfolio view:** objectives roll up to status and risk in a single board.
+
+```text
+IF stage = "Design" AND status = "Ready"
+THEN request_approval(reviewer="UX Lead") AND set_due(48h)
+ELSE IF blocked_for > 24h
+THEN escalate_to = "PM"
+```
