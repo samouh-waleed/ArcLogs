@@ -21,7 +21,7 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:3000")
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")  # We'll get this from DB
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 
 # Initialize SQS
 sqs = boto3.client(
