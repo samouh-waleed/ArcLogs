@@ -488,6 +488,17 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   insights: many(insight),
 }));
 
+export const teamMemberRelations = relations(teamMember, ({ one }) => ({
+  team: one(team, {
+    fields: [teamMember.teamId],
+    references: [team.id],
+  }),
+  user: one(user, {
+    fields: [teamMember.userId],
+    references: [user.id],
+  }),
+}));
+
 export const standupConfigRelations = relations(
   standupConfig,
   ({ one, many }) => ({

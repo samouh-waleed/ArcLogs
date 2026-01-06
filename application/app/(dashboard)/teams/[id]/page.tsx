@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,16 +38,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-export default function TeamDetailPage({ params }: { params: { id: string } }) {
+export default function TeamDetailPage() {
   const router = useRouter();
+  const params = useParams(); // ← Use useParams() hook instead
+  const teamId = params.id as string; // ← Get id from params
+
   const [team, setTeam] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function loadTeam() {
+      if (!teamId) return; // ← Guard against undefined
+
       try {
-        const response = await fetch(`/api/teams/${params.id}`);
+        const response = await fetch(`/api/teams/${teamId}`);
         if (response.ok) {
           const data = await response.json();
           setTeam(data.team);
@@ -63,12 +68,12 @@ export default function TeamDetailPage({ params }: { params: { id: string } }) {
     }
 
     loadTeam();
-  }, [params.id, router]);
+  }, [teamId, router]);
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const response = await fetch(`/api/teams/${params.id}`, {
+      const response = await fetch(`/api/teams/${teamId}`, {
         method: "DELETE",
       });
 

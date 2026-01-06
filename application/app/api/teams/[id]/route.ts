@@ -9,7 +9,7 @@ import { headers } from "next/headers";
 // GET - Get single team with members
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -20,20 +20,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.id;
+    const { id: teamId } = await params;
 
-    // Fetch team with members
+    // Fetch team
     const teamData = await db.query.team.findFirst({
       where: and(eq(team.id, teamId), isNull(team.deletedAt)),
-      with: {
-        teamMembers: {
-          where: isNull(teamMember.deletedAt),
-          with: {
-            user: true,
-          },
-        },
-        organization: true,
-      },
     });
 
     if (!teamData) {
@@ -53,7 +44,20 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    return NextResponse.json({ team: teamData });
+    // Fetch team members with relations (now it will work!)
+    const members = await db.query.teamMember.findMany({
+      where: and(eq(teamMember.teamId, teamId), isNull(teamMember.deletedAt)),
+      with: {
+        user: true,
+      },
+    });
+
+    return NextResponse.json({
+      team: {
+        ...teamData,
+        teamMembers: members,
+      },
+    });
   } catch (error) {
     console.error("Error fetching team:", error);
     return NextResponse.json(
@@ -63,10 +67,10 @@ export async function GET(
   }
 }
 
-// PUT - Update team
+// PUT and DELETE remain the same...
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -77,7 +81,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.id;
+    const { id: teamId } = await params;
     const body = await req.json();
     const { name, description, slackChannelId, slackChannelName } = body;
 
@@ -136,10 +140,9 @@ export async function PUT(
   }
 }
 
-// DELETE - Soft delete team
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -150,7 +153,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.id;
+    const { id: teamId } = await params;
 
     // Get team
     const existingTeam = await db.query.team.findFirst({
