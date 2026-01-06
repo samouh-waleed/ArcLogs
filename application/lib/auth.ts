@@ -53,9 +53,9 @@ export const auth = betterAuth({
           await resend.emails.send({
             from:
               process.env.RESEND_FROM_EMAIL ||
-              "Arc Logs <onboarding@arclogs.com>",
+              "ArcLogs <onboarding@arclogs.com>",
             to: data.email,
-            subject: `You've been invited to join ${data.organization.name} on Arc Logs`,
+            subject: `You've been invited to join ${data.organization.name} on ArcLogs`,
             html: `
               <!DOCTYPE html>
               <html>
@@ -65,7 +65,7 @@ export const auth = betterAuth({
                 </head>
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                   <div style="background: linear-gradient(to right, #4F46E5, #7C3AED); padding: 30px; border-radius: 8px 8px 0 0; text-align: center;">
-                    <h1 style="color: white; margin: 0; font-size: 28px;">Arc Logs</h1>
+                    <h1 style="color: white; margin: 0; font-size: 28px;">ArcLogs</h1>
                   </div>
                   
                   <div style="background: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
@@ -77,11 +77,11 @@ export const auth = betterAuth({
                       }</strong> has invited you to join 
                       <strong>${
                         data.organization.name
-                      }</strong> on Arc Logs as a <strong>${roleDisplayName}</strong>.
+                      }</strong> on ArcLogs as a <strong>${roleDisplayName}</strong>.
                     </p>
                     
                     <p style="font-size: 16px; color: #4b5563;">
-                      Arc Logs helps teams replace daily standups with async updates and AI-powered insights.
+                      ArcLogs helps teams replace daily standups with async updates and AI-powered insights.
                     </p>
                     
                     <div style="margin: 32px 0; text-align: center;">
@@ -106,7 +106,7 @@ export const auth = betterAuth({
                   </div>
                   
                   <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
-                    <p>© ${new Date().getFullYear()} Arc Logs. All rights reserved.</p>
+                    <p>© ${new Date().getFullYear()} ArcLogs. All rights reserved.</p>
                   </div>
                 </body>
               </html>

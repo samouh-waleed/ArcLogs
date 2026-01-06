@@ -1,3 +1,4 @@
+// app/(auth)/create-organization/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -37,7 +38,6 @@ export default function CreateOrganizationPage() {
     try {
       const slug = slugify(name);
 
-      // Use Better Auth's organization.create
       const { data, error: createError } = await authClient.organization.create(
         {
           name: name.trim(),
@@ -49,7 +49,6 @@ export default function CreateOrganizationPage() {
         throw new Error(createError.message || "Failed to create organization");
       }
 
-      // Set as active organization
       await authClient.organization.setActive({
         organizationId: data.id,
       });
@@ -64,7 +63,7 @@ export default function CreateOrganizationPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -100,7 +99,7 @@ export default function CreateOrganizationPage() {
                 autoFocus
               />
               <p className="text-xs text-muted-foreground">
-                This will be the name of your organization in Arc Logs
+                This will be the name of your organization in ArcLogs
               </p>
             </div>
 

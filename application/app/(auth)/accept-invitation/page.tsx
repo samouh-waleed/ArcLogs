@@ -1,4 +1,4 @@
-// app/accept-invitation/page.tsx
+// app/(auth)/accept-invitation/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -40,7 +40,6 @@ export default function AcceptInvitationPage() {
 
   const fetchInvitation = async () => {
     try {
-      // Use Better Auth's getInvitation - id goes in query object
       const { data, error } = await authClient.organization.getInvitation({
         query: {
           id: invitationId!,
@@ -60,7 +59,6 @@ export default function AcceptInvitationPage() {
     setError("");
 
     try {
-      // Use Better Auth's acceptInvitation
       const { error } = await authClient.organization.acceptInvitation({
         invitationId: invitationId!,
       });
@@ -78,7 +76,6 @@ export default function AcceptInvitationPage() {
 
   const handleDecline = async () => {
     try {
-      // Use Better Auth's rejectInvitation
       await authClient.organization.rejectInvitation({
         invitationId: invitationId!,
       });
@@ -90,7 +87,7 @@ export default function AcceptInvitationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
           <p className="mt-4 text-muted-foreground">Loading invitation...</p>
@@ -101,7 +98,7 @@ export default function AcceptInvitationPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Sign in Required</CardTitle>
@@ -141,7 +138,7 @@ export default function AcceptInvitationPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
         <Card className="w-full max-w-md">
           <CardContent className="pt-12 pb-12 text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
@@ -160,7 +157,7 @@ export default function AcceptInvitationPage() {
 
   if (error && !invitation) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
         <Card className="w-full max-w-md">
           <CardContent className="pt-12 pb-12 text-center">
             <AlertCircle className="h-16 w-16 text-destructive mx-auto" />
@@ -176,7 +173,7 @@ export default function AcceptInvitationPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center justify-center mb-4">

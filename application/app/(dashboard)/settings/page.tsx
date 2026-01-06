@@ -72,7 +72,6 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [error, setError] = useState("");
   const [slackWorkspace, setSlackWorkspace] = useState<any>(null);
-  const [loadingSlack, setLoadingSlack] = useState(true);
 
   const { data: session } = authClient.useSession();
   const { data: activeOrg, isPending: isLoadingOrg } =
@@ -132,6 +131,20 @@ export default function SettingsPage() {
     enabled: !!activeOrg?.id,
   });
 
+  // Get organization usage
+  const { data: usage } = useQuery({
+    queryKey: ["organization-usage", activeOrg?.id],
+    queryFn: async () => {
+      if (!activeOrg?.id) return null;
+      const response = await fetch(
+        `/api/organization-usage?orgId=${activeOrg.id}`
+      );
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!activeOrg?.id,
+  });
+
   const invitations = Array.isArray(invitationsData)
     ? invitationsData.filter((inv: any) => inv.status === "pending")
     : [];
@@ -143,9 +156,32 @@ export default function SettingsPage() {
   const isAdmin = currentUserMember?.role === "admin";
   const canManageMembers = isOwner || isAdmin;
 
+  // Check member limit mutation
+  const checkLimitMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/check-member-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: activeOrg?.id }),
+      });
+
+      if (!response.ok) throw new Error("Failed to check limit");
+      return response.json();
+    },
+  });
+
   // Invite member mutation
   const inviteMutation = useMutation({
     mutationFn: async () => {
+      // Check limit first
+      const limitCheck = await checkLimitMutation.mutateAsync();
+
+      if (!limitCheck.canAdd) {
+        throw new Error(
+          `Member limit reached (${limitCheck.currentCount}/${limitCheck.limit}). Please upgrade your subscription.`
+        );
+      }
+
       const { data, error } = await authClient.organization.inviteMember({
         email: inviteEmail,
         role: inviteRole,
@@ -156,6 +192,7 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invitations"] });
       queryClient.invalidateQueries({ queryKey: ["organization-full"] });
+      queryClient.invalidateQueries({ queryKey: ["organization-usage"] });
       setInviteDialogOpen(false);
       setInviteEmail("");
       setInviteRole("member");
@@ -221,6 +258,7 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-full"] });
+      queryClient.invalidateQueries({ queryKey: ["organization-usage"] });
       // Update subscription seats
       if (activeOrg?.id) {
         updateSeats.mutate(activeOrg.id);
@@ -389,6 +427,118 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Usage & Limits */}
+      {canManageMembers && usage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Usage & Limits</CardTitle>
+            <CardDescription>
+              Current usage across your organization
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Members */}
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Members</p>
+                  {usage.members.percentage >= 100 && (
+                    <Badge variant="destructive" className="text-xs">
+                      Limit
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-2xl font-bold">{usage.members.current}</p>
+                <p className="text-sm text-muted-foreground">
+                  of {usage.members.limit}{" "}
+                  {usage.status === "free" ? "allowed" : "used"}
+                </p>
+                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      usage.members.percentage >= 100
+                        ? "bg-red-500"
+                        : "bg-primary"
+                    }`}
+                    style={{
+                      width: `${Math.min(usage.members.percentage, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Teams */}
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Teams</p>
+                  {usage.teams.percentage >= 100 && (
+                    <Badge variant="destructive" className="text-xs">
+                      Limit
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-2xl font-bold">{usage.teams.current}</p>
+                <p className="text-sm text-muted-foreground">
+                  of {usage.teams.limit}{" "}
+                  {usage.status === "free" ? "allowed" : "used"}
+                </p>
+                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      usage.teams.percentage >= 100
+                        ? "bg-red-500"
+                        : "bg-primary"
+                    }`}
+                    style={{
+                      width: `${Math.min(usage.teams.percentage, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Standups */}
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Standups</p>
+                  {usage.standups.percentage >= 100 && (
+                    <Badge variant="destructive" className="text-xs">
+                      Limit
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-2xl font-bold">{usage.standups.current}</p>
+                <p className="text-sm text-muted-foreground">
+                  of {usage.standups.limit}{" "}
+                  {usage.status === "free" ? "allowed" : "used"}
+                </p>
+                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      usage.standups.percentage >= 100
+                        ? "bg-red-500"
+                        : "bg-primary"
+                    }`}
+                    style={{
+                      width: `${Math.min(usage.standups.percentage, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {usage.status === "free" && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You're on the free plan. Upgrade to unlock unlimited teams,
+                  members, and standups.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Slack Integration */}
       <Card>

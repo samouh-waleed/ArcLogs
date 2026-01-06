@@ -35,6 +35,7 @@ import {
   Crown,
   Menu,
   Sparkles,
+  ChartArea,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,6 +44,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Teams", href: "/teams", icon: Users },
+  { name: "Analytics", href: "/analytics", icon: ChartArea },
 ];
 
 const adminNavigation = [
@@ -65,7 +67,7 @@ function Logo({ className }: { className?: string }) {
         <Sparkles className="h-4 w-4 text-primary-foreground" />
       </div>
       <span className="text-lg font-bold tracking-tight text-foreground">
-        Arc Logs
+        ArcLogs
       </span>
     </Link>
   );

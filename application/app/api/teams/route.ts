@@ -1,46 +1,12 @@
 // app/api/teams/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { team, member, subscription } from "@/drizzle/schema";
+import { team, member, teamMember } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
-
-// Subscription limits
-const LIMITS = {
-  free: { teams: 1, membersPerTeam: 5, standups: 1 },
-  trialing: { teams: 999, membersPerTeam: 999, standups: 999 },
-  active: { teams: 999, membersPerTeam: 999, standups: 999 },
-};
-
-async function checkSubscriptionLimits(
-  organizationId: string,
-  type: "teams" | "members" | "standups",
-  currentCount: number
-) {
-  const subscriptions = await db.query.subscription.findMany({
-    where: eq(subscription.referenceId, organizationId),
-  });
-
-  const activeSubscription = subscriptions.find(
-    (sub: any) => sub.status === "active" || sub.status === "trialing"
-  );
-
-  const status = activeSubscription?.status || "free";
-  const limits = LIMITS[status as keyof typeof LIMITS] || LIMITS.free;
-
-  switch (type) {
-    case "teams":
-      return currentCount < limits.teams;
-    case "members":
-      return currentCount < limits.membersPerTeam;
-    case "standups":
-      return currentCount < limits.standups;
-    default:
-      return false;
-  }
-}
+import { checkTeamLimit } from "@/lib/limits";
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,19 +42,24 @@ export async function GET(req: NextRequest) {
 
     const teams = await db.query.team.findMany({
       where: and(eq(team.organizationId, orgId), isNull(team.deletedAt)),
-      with: {
-        teamMembers: {
-          where: isNull(member.deletedAt),
-        },
-      },
       orderBy: (team, { desc }) => [desc(team.createdAt)],
     });
 
+    // Get member counts separately
+    const teamsWithCounts = await Promise.all(
+      teams.map(async (t) => {
+        const members = await db.query.teamMember.findMany({
+          where: and(eq(teamMember.teamId, t.id), isNull(teamMember.deletedAt)),
+        });
+        return {
+          ...t,
+          memberCount: members.length,
+        };
+      })
+    );
+
     return NextResponse.json({
-      teams: teams.map((t) => ({
-        ...t,
-        memberCount: t.teamMembers.length,
-      })),
+      teams: teamsWithCounts,
     });
   } catch (error) {
     console.error("Error fetching teams:", error);
@@ -140,22 +111,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Check team limit
-    const existingTeams = await db.query.team.findMany({
-      where: and(
-        eq(team.organizationId, organizationId),
-        isNull(team.deletedAt)
-      ),
-    });
+    // Check team limit using centralized function
+    const limitCheck = await checkTeamLimit(organizationId);
 
-    const canCreate = await checkSubscriptionLimits(
-      organizationId,
-      "teams",
-      existingTeams.length
-    );
-    if (!canCreate) {
+    if (!limitCheck.allowed) {
       return NextResponse.json(
-        { error: "Team limit reached. Please upgrade your subscription." },
+        {
+          error: `Team limit reached (${limitCheck.currentCount}/${limitCheck.limit}). Please upgrade your subscription.`,
+        },
         { status: 403 }
       );
     }

@@ -1,39 +1,12 @@
 // app/api/standups/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { standupConfig, team, member, subscription } from "@/drizzle/schema";
+import { standupConfig, team, member } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
-
-const LIMITS = {
-  free: { standups: 1 },
-  trialing: { standups: 999 },
-  active: { standups: 999 },
-};
-
-async function checkStandupLimit(teamId: string, organizationId: string) {
-  const subscriptions = await db.query.subscription.findMany({
-    where: eq(subscription.referenceId, organizationId),
-  });
-
-  const activeSubscription = subscriptions.find(
-    (sub: any) => sub.status === "active" || sub.status === "trialing"
-  );
-
-  const status = activeSubscription?.status || "free";
-  const limits = LIMITS[status as keyof typeof LIMITS] || LIMITS.free;
-
-  const existingStandups = await db.query.standupConfig.findMany({
-    where: and(
-      eq(standupConfig.teamId, teamId),
-      isNull(standupConfig.deletedAt)
-    ),
-  });
-
-  return existingStandups.length < limits.standups;
-}
+import { checkStandupLimit } from "@/lib/limits";
 
 export async function GET(req: NextRequest) {
   try {
@@ -148,11 +121,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Check standup limit
-    const canCreate = await checkStandupLimit(teamId, teamData.organizationId);
-    if (!canCreate) {
+    // Check standup limit using centralized function
+    const limitCheck = await checkStandupLimit(teamId, teamData.organizationId);
+
+    if (!limitCheck.allowed) {
       return NextResponse.json(
-        { error: "Standup limit reached. Please upgrade your subscription." },
+        {
+          error: `Standup limit reached (${limitCheck.currentCount}/${limitCheck.limit}). Please upgrade your subscription.`,
+        },
         { status: 403 }
       );
     }

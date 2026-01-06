@@ -1,3 +1,4 @@
+// app/(auth)/signup/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -35,14 +36,12 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       setLoading(false);
       return;
     }
 
-    // Validate password strength
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       setLoading(false);
@@ -82,13 +81,13 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">
             Create an account
           </CardTitle>
-          <CardDescription>Get started with Arc Logs today</CardDescription>
+          <CardDescription>Get started with ArcLogs today</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
