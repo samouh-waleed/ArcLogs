@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,12 +27,15 @@ import { Loader2, ArrowLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 
-export default function EditTeamPage({ params }: { params: { id: string } }) {
+export default function EditTeamPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState("");
   const [channels, setChannels] = useState<any[]>([]);
+
+  const params = useParams();
+  const teamId = params.id as string;
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -44,7 +47,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
     async function loadData() {
       try {
         // Load team
-        const teamResponse = await fetch(`/api/teams/${params.id}`);
+        const teamResponse = await fetch(`/api/teams/${teamId}`);
         if (teamResponse.ok) {
           const teamData = await teamResponse.json();
           setName(teamData.team.name);
@@ -70,7 +73,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
     }
 
     loadData();
-  }, [params.id, activeOrg?.id]);
+  }, [teamId, activeOrg?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +85,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
         (ch) => ch.id === selectedChannel
       );
 
-      const response = await fetch(`/api/teams/${params.id}`, {
+      const response = await fetch(`/api/teams/${teamId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,7 +101,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
         throw new Error(data.error || "Failed to update team");
       }
 
-      router.push(`/teams/${params.id}`);
+      router.push(`/teams/${teamId}`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -119,7 +122,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}`}>
+          <Link href={`/teams/${teamId}`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -207,7 +210,7 @@ export default function EditTeamPage({ params }: { params: { id: string } }) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/teams/${params.id}`)}
+                onClick={() => router.push(`/teams/${teamId}`)}
                 disabled={loading}
               >
                 Cancel

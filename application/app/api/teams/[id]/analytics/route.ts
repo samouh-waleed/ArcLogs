@@ -15,7 +15,7 @@ import { headers } from "next/headers";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -28,7 +28,7 @@ export async function GET(
 
     const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get("days") || "30");
-    const teamId = params.id;
+    const { id: teamId } = await params;
 
     // Verify access
     const teamData = await db.query.team.findFirst({

@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -20,6 +20,7 @@ export async function PUT(
     }
 
     const { status } = await req.json();
+    const { id } = await params;
 
     const [updated] = await db
       .update(helpRequest)
@@ -29,7 +30,7 @@ export async function PUT(
         resolvedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(helpRequest.id, params.id))
+      .where(eq(helpRequest.id, id))
       .returning();
 
     return NextResponse.json({ helpRequest: updated });

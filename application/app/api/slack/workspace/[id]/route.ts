@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const workspaceId = params.id;
+    const { id: workspaceId } = await params;
 
     // Get workspace
     const workspace = await db.query.slackWorkspace.findFirst({

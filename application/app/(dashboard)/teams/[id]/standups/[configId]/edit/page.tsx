@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,15 +63,14 @@ type Question = {
   order: number;
 };
 
-export default function EditStandupPage({
-  params,
-}: {
-  params: { id: string; configId: string };
-}) {
+export default function EditStandupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState("");
+  const params = useParams();
+  const teamId = params.id as string;
+  const configId = params.configId as string;
 
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -82,7 +81,7 @@ export default function EditStandupPage({
   useEffect(() => {
     async function loadStandup() {
       try {
-        const response = await fetch(`/api/standups/${params.configId}`);
+        const response = await fetch(`/api/standups/${configId}`);
         if (response.ok) {
           const { standup } = await response.json();
           setName(standup.name);
@@ -99,7 +98,7 @@ export default function EditStandupPage({
     }
 
     loadStandup();
-  }, [params.configId]);
+  }, [configId]);
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -147,7 +146,7 @@ export default function EditStandupPage({
     }
 
     try {
-      const response = await fetch(`/api/standups/${params.configId}`, {
+      const response = await fetch(`/api/standups/${configId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -169,7 +168,7 @@ export default function EditStandupPage({
         throw new Error(data.error || "Failed to update standup");
       }
 
-      router.push(`/teams/${params.id}/standups`);
+      router.push(`/teams/${teamId}/standups`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -190,7 +189,7 @@ export default function EditStandupPage({
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}/standups`}>
+          <Link href={`/teams/${teamId}/standups`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -381,7 +380,7 @@ export default function EditStandupPage({
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push(`/teams/${params.id}/standups`)}
+            onClick={() => router.push(`/teams/${teamId}/standups`)}
             disabled={loading}
           >
             Cancel

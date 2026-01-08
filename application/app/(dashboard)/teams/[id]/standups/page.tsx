@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,20 +40,22 @@ import {
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function StandupsPage({ params }: { params: { id: string } }) {
+export default function StandupsPage() {
   const router = useRouter();
   const [team, setTeam] = useState<any>(null);
   const [standups, setStandups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
+  const params = useParams();
+  const teamId = params.id as string;
 
   useEffect(() => {
     async function loadData() {
       try {
         const [teamRes, standupsRes] = await Promise.all([
-          fetch(`/api/teams/${params.id}`),
-          fetch(`/api/standups?teamId=${params.id}`),
+          fetch(`/api/teams/${teamId}`),
+          fetch(`/api/standups?teamId=${teamId}`),
         ]);
 
         if (teamRes.ok) {

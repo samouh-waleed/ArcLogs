@@ -40,8 +40,8 @@ import {
 
 export default function TeamDetailPage() {
   const router = useRouter();
-  const params = useParams(); // ← Use useParams() hook instead
-  const teamId = params.id as string; // ← Get id from params
+  const params = useParams();
+  const teamId = params.id as string;
 
   const [team, setTeam] = useState<any>(null);
   const [loading, setLoading] = useState(true);

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -58,24 +58,23 @@ const COLORS = {
   secondary: "#8b5cf6",
 };
 
-export default function TeamAnalyticsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function TeamAnalyticsPage() {
   const router = useRouter();
   const [team, setTeam] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("30");
 
+  const params = useParams();
+  const teamId = params.id as string;
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       try {
         const [teamRes, analyticsRes] = await Promise.all([
-          fetch(`/api/teams/${params.id}`),
-          fetch(`/api/teams/${params.id}/analytics?days=${timeRange}`),
+          fetch(`/api/teams/${teamId}`),
+          fetch(`/api/teams/${teamId}/analytics?days=${timeRange}`),
         ]);
 
         if (teamRes.ok) {
@@ -95,7 +94,7 @@ export default function TeamAnalyticsPage({
     }
 
     loadData();
-  }, [params.id, timeRange]);
+  }, [teamId, timeRange]);
 
   if (loading) {
     return (
@@ -209,7 +208,7 @@ export default function TeamAnalyticsPage({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href={`/teams/${params.id}`}>
+            <Link href={`/teams/${teamId}`}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>

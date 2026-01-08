@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,22 +23,22 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export default function ResponsesPage({
-  params,
-}: {
-  params: { id: string; configId: string };
-}) {
+export default function ResponsesPage() {
   const router = useRouter();
   const [standup, setStandup] = useState<any>(null);
   const [responses, setResponses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const params = useParams();
+  const teamId = params.id as string;
+  const configId = params.configId as string;
+
   useEffect(() => {
     async function loadData() {
       try {
         const [standupRes, responsesRes] = await Promise.all([
-          fetch(`/api/standups/${params.configId}`),
-          fetch(`/api/standups/${params.configId}/responses`),
+          fetch(`/api/standups/${configId}`),
+          fetch(`/api/standups/${configId}/responses`),
         ]);
 
         if (standupRes.ok) {
@@ -58,7 +58,7 @@ export default function ResponsesPage({
     }
 
     loadData();
-  }, [params.configId]);
+  }, [configId]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -101,7 +101,7 @@ export default function ResponsesPage({
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}/standups`}>
+          <Link href={`/teams/${teamId}/standups`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>

@@ -10,7 +10,7 @@ import { nanoid } from "nanoid";
 // POST - Add members to team
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -21,7 +21,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.id;
+    const { id: teamId } = await params;
     const body = await req.json();
     const { members: membersToAdd } = body;
 

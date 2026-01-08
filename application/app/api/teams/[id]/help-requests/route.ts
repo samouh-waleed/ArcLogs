@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const teamId = params.id;
+    const { id: teamId } = await params;
 
     const teamData = await db.query.team.findFirst({
       where: and(eq(team.id, teamId), isNull(team.deletedAt)),

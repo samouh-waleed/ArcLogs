@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const standupId = params.id;
+    const { id: standupId } = await params;
 
     const standup = await db.query.standupConfig.findFirst({
       where: and(
@@ -59,7 +59,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -70,7 +70,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const standupId = params.id;
+    const { id: standupId } = await params;
     const body = await req.json();
 
     const existingStandup = await db.query.standupConfig.findFirst({
@@ -142,7 +142,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -153,7 +153,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const standupId = params.id;
+    const { id: standupId } = await params;
 
     const existingStandup = await db.query.standupConfig.findFirst({
       where: and(

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,22 +16,20 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, HelpCircle, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 
-export default function HelpRequestsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function HelpRequestsPage() {
   const router = useRouter();
   const [team, setTeam] = useState<any>(null);
   const [helpRequests, setHelpRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const params = useParams();
+  const teamId = params.id as string;
 
   useEffect(() => {
     async function loadData() {
       try {
         const [teamRes, helpRes] = await Promise.all([
-          fetch(`/api/teams/${params.id}`),
-          fetch(`/api/teams/${params.id}/help-requests`),
+          fetch(`/api/teams/${teamId}`),
+          fetch(`/api/teams/${teamId}/help-requests`),
         ]);
 
         if (teamRes.ok) {
@@ -51,7 +49,7 @@ export default function HelpRequestsPage({
     }
 
     loadData();
-  }, [params.id]);
+  }, [teamId]);
 
   const markResolved = async (requestId: string) => {
     try {
@@ -86,7 +84,7 @@ export default function HelpRequestsPage({
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}`}>
+          <Link href={`/teams/${teamId}`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>

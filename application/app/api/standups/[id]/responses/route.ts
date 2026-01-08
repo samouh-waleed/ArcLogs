@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const standupId = params.id;
+    const { id: standupId } = await params;
 
     // Get standup config
     const config = await db.query.standupConfig.findFirst({

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export default function AddMembersPage({ params }: { params: { id: string } }) {
+export default function AddMembersPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +34,8 @@ export default function AddMembersPage({ params }: { params: { id: string } }) {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const params = useParams();
+  const teamId = params.id as string;
 
   const { data: activeOrg } = authClient.useActiveOrganization();
 
@@ -91,7 +93,7 @@ export default function AddMembersPage({ params }: { params: { id: string } }) {
         };
       });
 
-      const response = await fetch(`/api/teams/${params.id}/members`, {
+      const response = await fetch(`/api/teams/${teamId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ members: membersToAdd }),
@@ -104,7 +106,7 @@ export default function AddMembersPage({ params }: { params: { id: string } }) {
 
       setSuccess(true);
       setTimeout(() => {
-        router.push(`/teams/${params.id}`);
+        router.push(`/teams/${teamId}`);
       }, 1500);
     } catch (err: any) {
       setError(err.message);
@@ -126,7 +128,7 @@ export default function AddMembersPage({ params }: { params: { id: string } }) {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}`}>
+          <Link href={`/teams/${teamId}`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -220,7 +222,7 @@ export default function AddMembersPage({ params }: { params: { id: string } }) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push(`/teams/${params.id}`)}
+                  onClick={() => router.push(`/teams/${teamId}`)}
                   disabled={loading}
                 >
                   Cancel

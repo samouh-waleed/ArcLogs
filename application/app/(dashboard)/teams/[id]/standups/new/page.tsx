@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,7 +62,7 @@ type Question = {
   order: number;
 };
 
-export default function NewStandupPage({ params }: { params: { id: string } }) {
+export default function NewStandupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +81,9 @@ export default function NewStandupPage({ params }: { params: { id: string } }) {
     { id: "2", text: "What will you work on today?", required: true, order: 1 },
     { id: "3", text: "Any blockers?", required: false, order: 2 },
   ]);
+
+  const params = useParams();
+  const teamId = params.id as string;
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -132,7 +135,7 @@ export default function NewStandupPage({ params }: { params: { id: string } }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          teamId: params.id,
+          teamId: teamId,
           name,
           timezone,
           scheduleTime,
@@ -153,7 +156,7 @@ export default function NewStandupPage({ params }: { params: { id: string } }) {
         throw new Error(data.error || "Failed to create standup");
       }
 
-      router.push(`/teams/${params.id}/standups`);
+      router.push(`/teams/${teamId}/standups`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -165,7 +168,7 @@ export default function NewStandupPage({ params }: { params: { id: string } }) {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={`/teams/${params.id}/standups`}>
+          <Link href={`/teams/${teamId}/standups`}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -364,7 +367,7 @@ export default function NewStandupPage({ params }: { params: { id: string } }) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push(`/teams/${params.id}/standups`)}
+            onClick={() => router.push(`/teams/${teamId}/standups`)}
             disabled={loading}
           >
             Cancel
