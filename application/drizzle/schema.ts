@@ -1,3 +1,4 @@
+// drizzle/schema.ts
 import { relations } from "drizzle-orm";
 import {
   pgTable,
@@ -8,6 +9,7 @@ import {
   index,
   uniqueIndex,
   jsonb,
+  date,
 } from "drizzle-orm/pg-core";
 
 // ============================================
@@ -25,8 +27,6 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-
-  // Stripe plugin
   stripeCustomerId: text("stripe_customer_id"),
 });
 
@@ -107,14 +107,8 @@ export const organization = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
     metadata: jsonb("metadata"),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
-
-    // Settings
-    allowTeamLeadersCreateTeams: boolean("allow_team_leaders_create_teams")
-      .default(false)
-      .notNull(),
+    trialEndsAt: timestamp("trial_ends_at"),
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
@@ -132,15 +126,12 @@ export const member = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // Role: 'owner' | 'member'
     role: text("role").default("member").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
@@ -166,8 +157,6 @@ export const invitation = pgTable(
     inviterId: text("inviter_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
@@ -178,7 +167,33 @@ export const invitation = pgTable(
 );
 
 // ============================================
-// TEAMS & TEAM MEMBERSHIP
+// SLACK INTEGRATION
+// ============================================
+
+export const slackWorkspace = pgTable(
+  "slack_workspace",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    slackTeamId: text("slack_team_id").notNull().unique(),
+    slackTeamName: text("slack_team_name"),
+    botToken: text("bot_token").notNull(),
+    botUserId: text("bot_user_id"),
+    installedBy: text("installed_by"),
+    installedAt: timestamp("installed_at").defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("slack_workspace_teamId_uidx").on(table.slackTeamId),
+    index("slack_workspace_organizationId_idx").on(table.organizationId),
+    index("slack_workspace_deletedAt_idx").on(table.deletedAt),
+  ]
+);
+
+// ============================================
+// TEAMS & STANDUPS
 // ============================================
 
 export const team = pgTable(
@@ -190,26 +205,15 @@ export const team = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    slackChannelId: text("slack_channel_id"),
+    slackChannelName: text("slack_channel_name"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
-    archivedAt: timestamp("archived_at"), // Soft archive (can be restored)
-
-    // Settings
-    membersCanSeeUpdates: boolean("members_can_see_updates")
-      .default(false)
-      .notNull(),
-    membersCanSeeInsights: boolean("members_can_see_insights")
-      .default(true)
-      .notNull(),
-    updateEditWindowMinutes: integer("update_edit_window_minutes")
-      .default(60)
-      .notNull(),
+    archivedAt: timestamp("archived_at"),
   },
   (table) => [
     index("team_organizationId_idx").on(table.organizationId),
@@ -228,98 +232,115 @@ export const teamMember = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // Role: 'leader' | 'member'
+    slackUserId: text("slack_user_id"),
     role: text("role").default("member").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
-
-    // Status tracking
-    lastUpdateAt: timestamp("last_update_at"),
-    onLeave: boolean("on_leave").default(false).notNull(),
   },
   (table) => [
     index("team_member_teamId_idx").on(table.teamId),
     index("team_member_userId_idx").on(table.userId),
+    index("team_member_slackUserId_idx").on(table.slackUserId),
     index("team_member_deletedAt_idx").on(table.deletedAt),
     uniqueIndex("team_member_team_user_uidx").on(table.teamId, table.userId),
   ]
 );
 
-// ============================================
-// DAILY QUESTIONS & UPDATES
-// ============================================
-
-export const dailyQuestion = pgTable(
-  "daily_question",
+export const standupConfig = pgTable(
+  "standup_config",
   {
     id: text("id").primaryKey(),
     teamId: text("team_id")
       .notNull()
       .references(() => team.id, { onDelete: "cascade" }),
-    question: text("question").notNull(),
-    order: integer("order").notNull(),
-    required: boolean("required").default(true).notNull(),
+    name: text("name").notNull(),
+    timezone: text("timezone").notNull().default("UTC"),
+    scheduleTime: text("schedule_time").notNull(),
+    scheduleDays: jsonb("schedule_days")
+      .$type<number[]>()
+      .notNull()
+      .default([1, 2, 3, 4, 5]),
+    questions: jsonb("questions")
+      .$type<
+        Array<{
+          id: string;
+          text: string;
+          required: boolean;
+          order: number;
+        }>
+      >()
+      .notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    allowVoiceResponses: boolean("allow_voice_responses")
+      .default(true)
+      .notNull(),
+    reminderMinutes: integer("reminder_minutes").default(30),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
-    index("daily_question_teamId_idx").on(table.teamId),
-    index("daily_question_deletedAt_idx").on(table.deletedAt),
+    index("standup_config_teamId_idx").on(table.teamId),
+    index("standup_config_isActive_idx").on(table.isActive),
+    index("standup_config_deletedAt_idx").on(table.deletedAt),
   ]
 );
 
-export const teamUpdate = pgTable(
-  "team_update",
+export const standupResponse = pgTable(
+  "standup_response",
   {
     id: text("id").primaryKey(),
+    standupConfigId: text("standup_config_id")
+      .notNull()
+      .references(() => standupConfig.id, { onDelete: "cascade" }),
     teamId: text("team_id")
       .notNull()
       .references(() => team.id, { onDelete: "cascade" }),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-
-    // Update content
-    updateDate: timestamp("update_date").notNull(), // The date this update is for
-    content: jsonb("content").notNull(), // { questionId: answer }
-
-    // Voice or text
-    updateType: text("update_type").notNull(), // 'voice' | 'text'
-    voiceUrl: text("voice_url"), // S3/storage URL if voice
-    voiceTranscript: text("voice_transcript"), // Transcribed text
+    slackUserId: text("slack_user_id").notNull(),
+    slackMessageTs: text("slack_message_ts"),
+    responseDate: date("response_date").notNull(),
+    responses: jsonb("responses").$type<Record<string, string>>().notNull(),
+    responseType: text("response_type").notNull(),
+    voiceUrl: text("voice_url"),
+    voiceTranscript: text("voice_transcript"),
     voiceDurationSeconds: integer("voice_duration_seconds"),
-
+    processingStatus: text("processing_status").default("pending").notNull(),
+    processedAt: timestamp("processed_at"),
+    aiInsights: jsonb("ai_insights").$type<{
+      blockers?: string[];
+      helpNeeded?: Array<{ mention: string; topic: string }>;
+      sentiment?: "positive" | "neutral" | "negative";
+      actionItems?: string[];
+    }>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
-
-    // Processing status
-    processingStatus: text("processing_status").default("pending").notNull(), // 'pending' | 'processing' | 'completed' | 'failed'
-    processedAt: timestamp("processed_at"),
   },
   (table) => [
-    index("team_update_teamId_idx").on(table.teamId),
-    index("team_update_userId_idx").on(table.userId),
-    index("team_update_updateDate_idx").on(table.updateDate),
-    index("team_update_deletedAt_idx").on(table.deletedAt),
-    index("team_update_processingStatus_idx").on(table.processingStatus),
+    index("standup_response_standupConfigId_idx").on(table.standupConfigId),
+    index("standup_response_teamId_idx").on(table.teamId),
+    index("standup_response_userId_idx").on(table.userId),
+    index("standup_response_responseDate_idx").on(table.responseDate),
+    index("standup_response_processingStatus_idx").on(table.processingStatus),
+    index("standup_response_deletedAt_idx").on(table.deletedAt),
+    uniqueIndex("standup_response_config_user_date_uidx").on(
+      table.standupConfigId,
+      table.userId,
+      table.responseDate
+    ),
   ]
 );
 
@@ -334,37 +355,27 @@ export const insight = pgTable(
     teamId: text("team_id")
       .notNull()
       .references(() => team.id, { onDelete: "cascade" }),
-
-    // Insight metadata
-    insightDate: timestamp("insight_date").notNull(),
-    insightType: text("insight_type").notNull(), // 'blocker' | 'help_request' | 'pattern' | 'dependency'
+    relatedResponseIds: jsonb("related_response_ids").$type<string[]>(),
+    insightDate: date("insight_date").notNull(),
+    insightType: text("insight_type").notNull(),
     title: text("title").notNull(),
     description: text("description").notNull(),
-    severity: text("severity").notNull(), // 'low' | 'medium' | 'high' | 'critical'
-
-    // Related updates
-    relatedUpdateIds: jsonb("related_update_ids"), // Array of update IDs
-
-    // Action tracking
-    status: text("status").default("open").notNull(), // 'open' | 'acknowledged' | 'resolved' | 'dismissed'
+    severity: text("severity").notNull(),
+    status: text("status").default("open").notNull(),
     acknowledgedBy: text("acknowledged_by").references(() => user.id),
     acknowledgedAt: timestamp("acknowledged_at"),
     resolvedBy: text("resolved_by").references(() => user.id),
     resolvedAt: timestamp("resolved_at"),
-
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
     index("insight_teamId_idx").on(table.teamId),
     index("insight_insightDate_idx").on(table.insightDate),
-    index("insight_insightType_idx").on(table.insightType),
     index("insight_status_idx").on(table.status),
     index("insight_deletedAt_idx").on(table.deletedAt),
   ]
@@ -374,38 +385,34 @@ export const helpRequest = pgTable(
   "help_request",
   {
     id: text("id").primaryKey(),
-    teamUpdateId: text("team_update_id")
+    responseId: text("response_id")
       .notNull()
-      .references(() => teamUpdate.id, { onDelete: "cascade" }),
+      .references(() => standupResponse.id, { onDelete: "cascade" }),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
     requesterId: text("requester_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-
-    // Help request details
-    helpType: text("help_type").notNull(), // 'technical' | 'review' | 'unblock' | 'other'
+    mentionedUserIds: jsonb("mentioned_user_ids").$type<string[]>(),
+    mentionedSlackUserIds: jsonb("mentioned_slack_user_ids").$type<string[]>(),
     description: text("description").notNull(),
-
-    // Routing
-    routedToUserIds: jsonb("routed_to_user_ids"), // Array of user IDs
-    notificationSent: boolean("notification_sent").default(false).notNull(),
-    notificationSentAt: timestamp("notification_sent_at"),
-
-    // Status
-    status: text("status").default("open").notNull(), // 'open' | 'in_progress' | 'resolved'
+    topic: text("topic"),
+    notificationsSent: boolean("notifications_sent").default(false).notNull(),
+    notificationsSentAt: timestamp("notifications_sent_at"),
+    status: text("status").default("open").notNull(),
     resolvedBy: text("resolved_by").references(() => user.id),
     resolvedAt: timestamp("resolved_at"),
-
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-
-    // Soft delete
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
-    index("help_request_teamUpdateId_idx").on(table.teamUpdateId),
+    index("help_request_responseId_idx").on(table.responseId),
+    index("help_request_teamId_idx").on(table.teamId),
     index("help_request_requesterId_idx").on(table.requesterId),
     index("help_request_status_idx").on(table.status),
     index("help_request_deletedAt_idx").on(table.deletedAt),
@@ -420,27 +427,17 @@ export const subscription = pgTable(
   "subscription",
   {
     id: text("id").primaryKey(),
-
     plan: text("plan").notNull(),
-
-    // associated entity id (organization id)
     referenceId: text("reference_id").notNull(),
-
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
-
     status: text("status").notNull(),
-
     periodStart: timestamp("period_start"),
     periodEnd: timestamp("period_end"),
-
     cancelAtPeriodEnd: boolean("cancel_at_period_end"),
-
     seats: integer("seats"),
-
     trialStart: timestamp("trial_start"),
     trialEnd: timestamp("trial_end"),
-
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -449,10 +446,6 @@ export const subscription = pgTable(
   },
   (table) => [
     index("subscription_referenceId_idx").on(table.referenceId),
-    index("subscription_stripeCustomerId_idx").on(table.stripeCustomerId),
-    index("subscription_stripeSubscriptionId_idx").on(
-      table.stripeSubscriptionId
-    ),
     index("subscription_status_idx").on(table.status),
   ]
 );
@@ -465,52 +458,22 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   members: many(member),
-  invitations: many(invitation),
   teamMembers: many(teamMember),
-  teamUpdates: many(teamUpdate),
-  helpRequests: many(helpRequest),
-}));
-
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
+  standupResponses: many(standupResponse),
 }));
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
   teams: many(team),
+  slackWorkspaces: many(slackWorkspace),
   subscriptions: many(subscription),
 }));
 
-export const memberRelations = relations(member, ({ one }) => ({
+export const slackWorkspaceRelations = relations(slackWorkspace, ({ one }) => ({
   organization: one(organization, {
-    fields: [member.organizationId],
+    fields: [slackWorkspace.organizationId],
     references: [organization.id],
-  }),
-  user: one(user, {
-    fields: [member.userId],
-    references: [user.id],
-  }),
-}));
-
-export const invitationRelations = relations(invitation, ({ one }) => ({
-  organization: one(organization, {
-    fields: [invitation.organizationId],
-    references: [organization.id],
-  }),
-  user: one(user, {
-    fields: [invitation.inviterId],
-    references: [user.id],
   }),
 }));
 
@@ -520,8 +483,8 @@ export const teamRelations = relations(team, ({ one, many }) => ({
     references: [organization.id],
   }),
   teamMembers: many(teamMember),
-  dailyQuestions: many(dailyQuestion),
-  teamUpdates: many(teamUpdate),
+  standupConfigs: many(standupConfig),
+  standupResponses: many(standupResponse),
   insights: many(insight),
 }));
 
@@ -536,46 +499,47 @@ export const teamMemberRelations = relations(teamMember, ({ one }) => ({
   }),
 }));
 
-export const dailyQuestionRelations = relations(dailyQuestion, ({ one }) => ({
-  team: one(team, {
-    fields: [dailyQuestion.teamId],
-    references: [team.id],
-  }),
-}));
+export const standupConfigRelations = relations(
+  standupConfig,
+  ({ one, many }) => ({
+    team: one(team, {
+      fields: [standupConfig.teamId],
+      references: [team.id],
+    }),
+    responses: many(standupResponse),
+  })
+);
 
-export const teamUpdateRelations = relations(teamUpdate, ({ one, many }) => ({
-  team: one(team, {
-    fields: [teamUpdate.teamId],
-    references: [team.id],
-  }),
-  user: one(user, {
-    fields: [teamUpdate.userId],
-    references: [user.id],
-  }),
-  helpRequests: many(helpRequest),
-}));
-
-export const insightRelations = relations(insight, ({ one }) => ({
-  team: one(team, {
-    fields: [insight.teamId],
-    references: [team.id],
-  }),
-}));
+export const standupResponseRelations = relations(
+  standupResponse,
+  ({ one, many }) => ({
+    standupConfig: one(standupConfig, {
+      fields: [standupResponse.standupConfigId],
+      references: [standupConfig.id],
+    }),
+    team: one(team, {
+      fields: [standupResponse.teamId],
+      references: [team.id],
+    }),
+    user: one(user, {
+      fields: [standupResponse.userId],
+      references: [user.id],
+    }),
+    helpRequests: many(helpRequest),
+  })
+);
 
 export const helpRequestRelations = relations(helpRequest, ({ one }) => ({
-  teamUpdate: one(teamUpdate, {
-    fields: [helpRequest.teamUpdateId],
-    references: [teamUpdate.id],
+  response: one(standupResponse, {
+    fields: [helpRequest.responseId],
+    references: [standupResponse.id],
+  }),
+  team: one(team, {
+    fields: [helpRequest.teamId],
+    references: [team.id],
   }),
   requester: one(user, {
     fields: [helpRequest.requesterId],
     references: [user.id],
-  }),
-}));
-
-export const subscriptionRelations = relations(subscription, ({ one }) => ({
-  organization: one(organization, {
-    fields: [subscription.referenceId],
-    references: [organization.id],
   }),
 }));
