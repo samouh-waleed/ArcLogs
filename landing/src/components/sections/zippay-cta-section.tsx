@@ -1,31 +1,60 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
-
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type CTAProps = {
   title?: string;
   description?: string;
-  primaryHref?: string;
-  primaryLabel?: string;
-  secondaryHref?: string;
-  secondaryLabel?: string;
   patternSrc?: string;
 };
 
 export default function ZippayCtaSection({
-  // NEW CONTENT: Focus on getting them to start now
   title = 'Ready to reclaim your time?',
   description = `Join engineering teams that have switched to ArcLogs and stopped wasting hours in meetings.`,
-  primaryHref = '/signup',
-  primaryLabel = 'Get Started', 
-  // secondary props are no longer used
   patternSrc = '/images/homepage/cta/pattern.webp',
 }: CTAProps) {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [message, setMessage] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStatus('success');
+        setMessage('Thanks for joining! Check your email for confirmation.');
+        setEmail('');
+      } else {
+        setStatus('error');
+        setMessage(data.error || 'Something went wrong. Please try again.');
+      }
+    } catch (error) {
+      setStatus('error');
+      setMessage('Failed to join waitlist. Please try again.');
+    }
+  };
+
   return (
-    <section className="bg-primary-300 relative overflow-hidden px-6 py-10 text-white lg:py-26">
+    <section
+      id="waitlist"
+      className="bg-primary-300 relative overflow-hidden px-6 py-10 text-white lg:py-26"
+    >
       <div className="pointer-events-none absolute inset-0 hidden lg:block">
         <Image
           src={patternSrc}
@@ -45,17 +74,34 @@ export default function ZippayCtaSection({
           {description}
         </p>
 
-        <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button
-            asChild
-            className="w-full text-gray-900 sm:w-auto"
-            variant="default"
-          >
-            <Link href={primaryHref}>{primaryLabel}</Link>
-          </Button>
+        <form onSubmit={handleSubmit} className="mx-auto mt-10 max-w-md">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-2">
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={status === 'loading'}
+              className="flex-1 border-white bg-white text-gray-900 placeholder:text-gray-500"
+            />
+            <Button
+              type="submit"
+              disabled={status === 'loading'}
+              className="w-full bg-white text-gray-900 hover:bg-gray-100 sm:w-auto"
+            >
+              {status === 'loading' ? 'Joining...' : 'Join Waitlist'}
+            </Button>
+          </div>
 
-          {/* REMOVED: Secondary "See How It Works" Button */}
-        </div>
+          {message && (
+            <p
+              className={`mt-4 text-sm ${status === 'success' ? 'text-green-100' : 'text-red-200'}`}
+            >
+              {message}
+            </p>
+          )}
+        </form>
       </div>
     </section>
   );
