@@ -79,15 +79,17 @@ const Navbar = () => {
           {/* Auth Buttons */}
           <div className="flex items-center gap-2.5">
             {/* ThemeToggle removed as requested */}
-            
+
             <Link href="/login" className="hidden lg:block">
               <Button size="sm" variant="secondary">
                 Sign In
               </Button>
             </Link>
-            <Link href="/login" className="hidden lg:block">
+            <Link href="#waitlist" className="hidden lg:block">
               {/* Added text-white to enforce white font color */}
-              <Button size="sm" className="text-white">Get Started</Button>
+              <Button size="sm" className="text-white">
+                Join Waitlist
+              </Button>
             </Link>
 
             {/* Hamburger Menu Button (Mobile Only) */}
@@ -152,14 +154,14 @@ const Navbar = () => {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/login">
+              <Link href="#waitlist">
                 <Button
                   className="w-full text-white"
                   onClick={() => {
                     setIsMenuOpen(false);
                   }}
                 >
-                  Get Started
+                  Join Waitlist
                 </Button>
               </Link>
             </div>

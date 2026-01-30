@@ -3,7 +3,6 @@ import './globals.css';
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 
-import Banner from '@/components/layout/banner';
 import Footer from '@/components/layout/footer';
 import Navbar from '@/components/layout/navbar';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -56,16 +55,14 @@ export const metadata: Metadata = {
       { url: '/images/layout/image.png', sizes: '32x32' },
       { url: '/images/layout/image.png', sizes: 'any' }, // Fallback
     ],
-    apple: [
-      { url: '/images/layout/image.png', sizes: '180x180' }
-    ],
+    apple: [{ url: '/images/layout/image.png', sizes: '180x180' }],
     shortcut: [{ url: '/images/layout/image.png' }],
   },
   openGraph: {
-      title: 'ArcLogs - Skip the Standup, Keep the Alignment',
-      description:
-        'The intelligence layer for technical workspaces that converts async updates into actionable insights.',
-      siteName: 'ArcLogs',
+    title: 'ArcLogs - Skip the Standup, Keep the Alignment',
+    description:
+      'The intelligence layer for technical workspaces that converts async updates into actionable insights.',
+    siteName: 'ArcLogs',
     images: [
       {
         url: '/og-image.jpg',
@@ -76,11 +73,11 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-      card: 'summary_large_image',
-      title: 'ArcLogs - Async Standups',
-      description: 'Eliminate meetings. Keep alignment.',
-      creator: '@arclogs',
-    },
+    card: 'summary_large_image',
+    title: 'ArcLogs - Async Standups',
+    description: 'Eliminate meetings. Keep alignment.',
+    creator: '@arclogs',
+  },
 };
 
 export default function RootLayout({
@@ -98,7 +95,6 @@ export default function RootLayout({
           storageKey="zippay-theme"
           disableTransitionOnChange
         >
-          <Banner />
           <Navbar />
           <main>{children}</main>
           <Footer />
