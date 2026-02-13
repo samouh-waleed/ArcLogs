@@ -175,15 +175,15 @@ export default function EditTeamPage() {
             <div className="space-y-2">
               <Label htmlFor="channel">Slack Channel (Optional)</Label>
               <Select
-                value={selectedChannel}
-                onValueChange={setSelectedChannel}
+                value={selectedChannel || "none"}
+                onValueChange={(value) => setSelectedChannel(value === "none" ? "" : value)}
                 disabled={loading}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a channel for standup results" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {channels.map((channel) => (
                     <SelectItem key={channel.id} value={channel.id}>
                       #{channel.name} {channel.isPrivate && "🔒"}

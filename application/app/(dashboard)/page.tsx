@@ -103,6 +103,13 @@ export default function DashboardPage() {
     window.location.href = slackAuthUrl.toString();
   };
 
+  // Redirect to create organization if needed
+  useEffect(() => {
+    if (!isLoadingSession && !isLoadingOrg && (!session || !activeOrg)) {
+      router.push("/create-organization");
+    }
+  }, [isLoadingSession, isLoadingOrg, session, activeOrg, router]);
+
   if (isLoadingSession || isLoadingOrg) {
     return (
       <div className="space-y-6">
@@ -113,7 +120,6 @@ export default function DashboardPage() {
   }
 
   if (!session || !activeOrg) {
-    router.push("/create-organization");
     return null;
   }
 

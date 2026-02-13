@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ArcLogs Application
 
-## Getting Started
+Next.js 16 frontend and API layer for the ArcLogs standup platform.
 
-First, run the development server:
+## Tech Stack
+
+- **Next.js 16** with App Router, React 19, TypeScript
+- **PostgreSQL** on Neon (serverless) with Drizzle ORM + pgvector
+- **Better Auth** - multi-org, email/password, GitHub/Google/Microsoft OAuth
+- **Stripe** subscriptions via @better-auth/stripe
+- **AWS SQS** for async message queuing to the Python worker
+- **Radix UI** + Tailwind CSS 4 + Recharts for the dashboard
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # Dev server (port 3000)
+npm run db:push      # Push Drizzle schema to Neon
+npm run db:studio    # Drizzle Studio (DB browser)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+app/
+├── (auth)/                    # Login, signup, invitations, org creation
+├── (dashboard)/               # Dashboard, teams, settings, billing, analytics
+│   └── settings/jira/         # Jira connection management
+├── api/
+│   ├── auth/[...all]/         # Better Auth proxy
+│   ├── slack/
+│   │   ├── events/            # Slack event handler (text + audio standups)
+│   │   ├── interactions/      # Slack interactive buttons (ticket confirmation)
+│   │   ├── oauth/             # Slack app installation
+│   │   ├── channels/          # List Slack channels
+│   │   ├── users/             # List Slack users
+│   │   └── workspace/         # Workspace management
+│   ├── jira/                  # Jira connection, test, sync history
+│   ├── teams/                 # Team CRUD, members, analytics, help requests
+│   ├── standups/              # Standup config CRUD, responses
+│   ├── cron/                  # Scheduled standup delivery + digest generation
+│   └── ...                    # Billing, usage, invitations
+├── components/                # Sidebar, UI primitives, providers
+├── drizzle/schema.ts          # All database tables and relations
+└── lib/                       # DB, auth, types, utils, limits
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Key API Routes
 
-## Learn More
+| Route | Purpose |
+|-------|---------|
+| `POST /api/slack/events` | Receives Slack messages (text + audio), saves to DB, queues to SQS |
+| `POST /api/slack/interactions` | Handles interactive button clicks (ticket creation confirm/skip) |
+| `GET /api/slack/oauth` | Slack app OAuth installation |
+| `GET /api/cron/send-standups` | Cron: send standup DMs to team members |
+| `GET /api/cron/generate-digests` | Cron: generate daily team digests |
+| `POST /api/jira/test-connection` | Test Jira credentials |
 
-To learn more about Next.js, take a look at the following resources:
+## Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+PostgreSQL on Neon with pgvector extension. Key tables: `user`, `organization`, `team`, `team_member`, `standup_config`, `standup_response` (with `embedding vector(1536)`), `insight`, `help_request`, `jira_connection`, `jira_link`, `team_expertise`, `subscription`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Schema managed via Drizzle ORM (`drizzle/schema.ts`). Vector columns managed via raw SQL migrations in `worker/migrations/`.
 
-## Deploy on Vercel
+## Auth & Middleware
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`proxy.ts` acts as middleware - redirects unauthenticated requests to `/login`. Public routes (no auth required): `/api/slack/events`, `/api/slack/interactions`, `/api/auth`, `/api/cron`.

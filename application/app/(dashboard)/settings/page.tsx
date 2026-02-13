@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
 import { useUpdateSubscriptionSeats } from "@/hooks/useUpdateSubscriptionSeats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ import {
   Slack,
   CheckCircle,
   XCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -72,6 +74,7 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [error, setError] = useState("");
   const [slackWorkspace, setSlackWorkspace] = useState<any>(null);
+  const [jiraConnection, setJiraConnection] = useState<any>(null);
 
   const { data: session } = authClient.useSession();
   const { data: activeOrg, isPending: isLoadingOrg } =
@@ -126,6 +129,26 @@ export default function SettingsPage() {
         return data.workspace;
       }
       setSlackWorkspace(null);
+      return null;
+    },
+    enabled: !!activeOrg?.id,
+  });
+
+  // Load Jira connection
+  useQuery({
+    queryKey: ["jira-connection", activeOrg?.id],
+    queryFn: async () => {
+      if (!activeOrg?.id) return null;
+
+      const response = await fetch(
+        `/api/jira/connection?orgId=${activeOrg.id}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setJiraConnection(data.connection);
+        return data.connection;
+      }
+      setJiraConnection(null);
       return null;
     },
     enabled: !!activeOrg?.id,
@@ -638,6 +661,93 @@ export default function SettingsPage() {
                   Connect Slack
                 </Button>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Jira Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ExternalLink className="h-5 w-5" />
+            Jira Integration
+          </CardTitle>
+          <CardDescription>
+            Automatically create Jira tickets from standup blockers
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {jiraConnection && jiraConnection.isActive ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-4 bg-green-50 border-green-200">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{jiraConnection.jiraDomain}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Connected • Project: {jiraConnection.defaultProjectKey || "Not set"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/settings/jira">Manage</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/settings/jira/history">
+                      View History
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              <Alert>
+                <ExternalLink className="h-4 w-4" />
+                <AlertDescription>
+                  Jira integration is active. Blockers mentioned in standups will
+                  automatically create Jira tickets.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Not Connected</p>
+                    <p className="text-sm text-muted-foreground">
+                      Connect Jira to auto-create tickets from blockers
+                    </p>
+                  </div>
+                </div>
+                <Button asChild>
+                  <Link href="/settings/jira">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Connect Jira
+                  </Link>
+                </Button>
+              </div>
+
+              <Alert>
+                <ExternalLink className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <p className="font-medium">Benefits of Jira Integration:</p>
+                    <ul className="list-disc list-inside text-sm space-y-1">
+                      <li>Auto-create tickets from standup blockers</li>
+                      <li>Update existing tickets with progress</li>
+                      <li>No duplicate tickets on response edits</li>
+                      <li>Instant Slack notifications with ticket links</li>
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </div>
           )}
         </CardContent>
