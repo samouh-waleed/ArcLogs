@@ -16,13 +16,13 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?error=slack_denied`
+        `${process.env.NEXT_PUBLIC_APP_URL}/?error=slack_denied`
       );
     }
 
     if (!code || !state) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?error=invalid_slack_callback`
+        `${process.env.NEXT_PUBLIC_APP_URL}/?error=invalid_slack_callback`
       );
     }
 
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     if (!session) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/login?redirect=/dashboard`
+        `${process.env.NEXT_PUBLIC_APP_URL}/login?redirect=/`
       );
     }
 
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        client_id: process.env.SLACK_CLIENT_ID!,
+        client_id: process.env.NEXT_PUBLIC_SLACK_CLIENT_ID!,
         client_secret: process.env.SLACK_CLIENT_SECRET!,
         code,
         redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/slack/oauth`,
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     if (!data.ok) {
       console.error("Slack OAuth error:", data);
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?error=slack_auth_failed`
+        `${process.env.NEXT_PUBLIC_APP_URL}/?error=slack_auth_failed`
       );
     }
 
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
     if (!org) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?error=org_not_found`
+        `${process.env.NEXT_PUBLIC_APP_URL}/?error=org_not_found`
       );
     }
 
@@ -103,12 +103,12 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=slack_connected`
+      `${process.env.NEXT_PUBLIC_APP_URL}/?success=slack_connected`
     );
   } catch (error) {
     console.error("Slack OAuth error:", error);
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?error=slack_error`
+      `${process.env.NEXT_PUBLIC_APP_URL}/?error=slack_error`
     );
   }
 }

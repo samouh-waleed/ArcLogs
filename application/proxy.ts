@@ -9,6 +9,7 @@ const publicRoutes = [
   "/api/auth",
   "/api/slack/oauth",
   "/api/slack/events",
+  "/api/slack/interactions",
   "/api/cron",
   "/forgot-password",
   "/reset-password",

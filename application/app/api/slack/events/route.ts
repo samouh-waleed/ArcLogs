@@ -111,6 +111,21 @@ async function sendToSQS(message: any) {
   }
 }
 
+// Audio file detection
+const MAX_AUDIO_DURATION_SECONDS = 300; // 5 minutes
+const MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024; // 25MB (Whisper API limit)
+
+function isAudioFile(file: any): boolean {
+  const mimetype = file?.mimetype || "";
+  // Accept any audio/* type, plus video/webm (Slack clips sometimes use this)
+  return mimetype.startsWith("audio/") || mimetype === "video/webm";
+}
+
+function findAudioFile(files?: any[]): any | null {
+  if (!Array.isArray(files) || files.length === 0) return null;
+  return files.find((f: any) => isAudioFile(f)) || null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
@@ -140,6 +155,14 @@ export async function POST(req: NextRequest) {
       const slackEvent = event.event;
       const teamId = event.team_id;
 
+      console.log("📨 Received event:", {
+        type: slackEvent.type,
+        channel_type: slackEvent.channel_type,
+        user: slackEvent.user,
+        bot_id: slackEvent.bot_id,
+        subtype: slackEvent.subtype,
+      });
+
       const workspace = await db.query.slackWorkspace.findFirst({
         where: eq(slackWorkspace.slackTeamId, teamId),
         with: {
@@ -148,9 +171,11 @@ export async function POST(req: NextRequest) {
       });
 
       if (!workspace) {
-        console.error("Workspace not found for team:", teamId);
+        console.error("❌ Workspace not found for team:", teamId);
         return NextResponse.json({ ok: true });
       }
+
+      console.log("✅ Workspace found:", workspace.slackTeamName);
 
       const activeSubscription = await db.query.subscription.findFirst({
         where: eq(subscription.referenceId, workspace.organizationId),
@@ -172,7 +197,7 @@ export async function POST(req: NextRequest) {
 
       switch (slackEvent.type) {
         case "message":
-          if (slackEvent.channel_type === "im" && !slackEvent.bot_id) {
+          if (slackEvent.channel_type === "im" && !slackEvent.bot_id && (!slackEvent.subtype || slackEvent.subtype === "file_share")) {
             await handleStandupResponse(slackEvent, workspace);
           }
           break;
@@ -196,7 +221,20 @@ export async function POST(req: NextRequest) {
 async function handleStandupResponse(event: any, workspace: any) {
   try {
     const slackUserId = event.user;
+
+    // Check if this message contains an audio file
+    const audioFile = findAudioFile(event.files);
+    if (audioFile) {
+      await handleAudioStandupResponse(event, workspace, audioFile);
+      return;
+    }
+
     const messageText = event.text;
+
+    console.log("💬 Processing standup response:", {
+      slackUserId,
+      messageText: messageText?.substring(0, 50) + "...",
+    });
 
     const member = (await db.query.teamMember.findFirst({
       where: and(
@@ -218,9 +256,21 @@ async function handleStandupResponse(event: any, workspace: any) {
       },
     })) as TeamMemberWithRelations | undefined;
 
-    if (!member || !member.team.standupConfigs.length) {
+    if (!member) {
+      console.log("⚠️ No team member found for Slack user:", slackUserId);
       return;
     }
+
+    if (!member.team.standupConfigs.length) {
+      console.log("⚠️ No active standup config for team:", member.teamId);
+      return;
+    }
+
+    console.log("✅ Found member and config:", {
+      memberEmail: member.user.email,
+      teamName: member.team.name,
+      configId: member.team.standupConfigs[0].id,
+    });
 
     const config = member.team.standupConfigs[0];
 
@@ -243,27 +293,84 @@ async function handleStandupResponse(event: any, workspace: any) {
 
     const today = new Date().toISOString().split("T")[0];
 
-    const [savedResponse] = await db
-      .insert(standupResponse)
-      .values({
-        id: nanoid(),
-        standupConfigId: config.id,
-        teamId: member.teamId,
-        userId: member.userId,
-        slackUserId,
-        slackMessageTs: event.ts,
-        responseDate: today,
-        responses,
-        responseType: "text",
-        processingStatus: "pending",
-      })
-      .returning();
+    // Check if user already submitted a response today
+    const existingResponse = await db.query.standupResponse.findFirst({
+      where: and(
+        eq(standupResponse.userId, member.userId),
+        eq(standupResponse.teamId, member.teamId),
+        eq(standupResponse.standupConfigId, config.id),
+        eq(standupResponse.responseDate, today),
+        isNull(standupResponse.deletedAt)
+      ),
+    });
 
-    await sendSlackDM(
-      workspace.botToken,
-      slackUserId,
-      "✅ Thanks! Your standup update has been saved and will be processed."
-    );
+    let savedResponse;
+    let isUpdate = false;
+
+    if (existingResponse) {
+      // Update existing response
+      console.log("🔄 User already submitted today, updating existing response:", {
+        existingId: existingResponse.id,
+        userEmail: member.user.email,
+      });
+
+      const [updated] = await db
+        .update(standupResponse)
+        .set({
+          responses,
+          slackMessageTs: event.ts,
+          processingStatus: "pending",
+          updatedAt: new Date(),
+        })
+        .where(eq(standupResponse.id, existingResponse.id))
+        .returning();
+
+      savedResponse = updated;
+      isUpdate = true;
+
+      await sendSlackDM(
+        workspace.botToken,
+        slackUserId,
+        "✏️ Your standup update has been updated and will be reprocessed."
+      );
+    } else {
+      // Create new response
+      console.log("📝 Creating new standup response for:", {
+        userEmail: member.user.email,
+        date: today,
+      });
+
+      const [created] = await db
+        .insert(standupResponse)
+        .values({
+          id: nanoid(),
+          standupConfigId: config.id,
+          teamId: member.teamId,
+          userId: member.userId,
+          slackUserId,
+          slackMessageTs: event.ts,
+          responseDate: today,
+          responses,
+          responseType: "text",
+          processingStatus: "pending",
+        })
+        .returning();
+
+      savedResponse = created;
+
+      await sendSlackDM(
+        workspace.botToken,
+        slackUserId,
+        "✅ Thanks! Your standup update has been saved and will be processed."
+      );
+    }
+
+    console.log("📤 Sending to SQS:", {
+      type: "standup_response",
+      responseId: savedResponse.id,
+      teamId: member.teamId,
+      isUpdate,
+    });
 
     await sendToSQS({
       type: "standup_response",
@@ -273,9 +380,197 @@ async function handleStandupResponse(event: any, workspace: any) {
       teamId: member.teamId,
     });
 
-    console.log(`✅ Saved standup response from ${member.user.email}`);
+    console.log(
+      `✅ ${isUpdate ? "Updated" : "Saved"} standup response from ${member.user.email} and sent to SQS`
+    );
   } catch (error) {
     console.error("Error handling standup response:", error);
+  }
+}
+
+async function handleAudioStandupResponse(
+  event: any,
+  workspace: any,
+  audioFile: any
+) {
+  try {
+    const slackUserId = event.user;
+
+    console.log("🎤 Processing audio standup response:", {
+      slackUserId,
+      fileName: audioFile.name,
+      mimetype: audioFile.mimetype,
+      size: audioFile.size,
+    });
+
+    // Validate file size
+    if (audioFile.size > MAX_AUDIO_SIZE_BYTES) {
+      await sendSlackDM(
+        workspace.botToken,
+        slackUserId,
+        "⚠️ Audio file is too large (max 25MB). Please record a shorter response."
+      );
+      return;
+    }
+
+    // Validate duration if available
+    const durationSeconds = audioFile.duration_ms
+      ? Math.round(audioFile.duration_ms / 1000)
+      : null;
+
+    if (durationSeconds && durationSeconds > MAX_AUDIO_DURATION_SECONDS) {
+      await sendSlackDM(
+        workspace.botToken,
+        slackUserId,
+        "⚠️ Audio is too long (max 5 minutes). Please record a shorter response."
+      );
+      return;
+    }
+
+    // Find team member and standup config
+    const member = (await db.query.teamMember.findFirst({
+      where: and(
+        eq(teamMember.slackUserId, slackUserId),
+        isNull(teamMember.deletedAt)
+      ),
+      with: {
+        team: {
+          with: {
+            standupConfigs: {
+              where: and(
+                eq(standupConfig.isActive, true),
+                isNull(standupConfig.deletedAt)
+              ),
+            },
+          },
+        },
+        user: true,
+      },
+    })) as TeamMemberWithRelations | undefined;
+
+    if (!member) {
+      console.log("⚠️ No team member found for Slack user:", slackUserId);
+      return;
+    }
+
+    if (!member.team.standupConfigs.length) {
+      console.log("⚠️ No active standup config for team:", member.teamId);
+      return;
+    }
+
+    const config = member.team.standupConfigs[0];
+
+    // Check if voice responses are allowed for this standup
+    if (!config.allowVoiceResponses) {
+      await sendSlackDM(
+        workspace.botToken,
+        slackUserId,
+        "⚠️ Voice responses are not enabled for this standup. Please type your response instead."
+      );
+      return;
+    }
+
+    console.log("✅ Found member and config for audio:", {
+      memberEmail: member.user.email,
+      teamName: member.team.name,
+      configId: config.id,
+    });
+
+    const today = new Date().toISOString().split("T")[0];
+    const voiceUrl = audioFile.url_private_download || audioFile.url_private;
+
+    // Check for existing response today
+    const existingResponse = await db.query.standupResponse.findFirst({
+      where: and(
+        eq(standupResponse.userId, member.userId),
+        eq(standupResponse.teamId, member.teamId),
+        eq(standupResponse.standupConfigId, config.id),
+        eq(standupResponse.responseDate, today),
+        isNull(standupResponse.deletedAt)
+      ),
+    });
+
+    let savedResponse;
+    let isUpdate = false;
+
+    if (existingResponse) {
+      console.log("🔄 Updating existing response with audio:", {
+        existingId: existingResponse.id,
+        userEmail: member.user.email,
+      });
+
+      const [updated] = await db
+        .update(standupResponse)
+        .set({
+          responseType: "voice",
+          voiceUrl,
+          voiceDurationSeconds: durationSeconds,
+          voiceTranscript: null,
+          responses: {},
+          slackMessageTs: event.ts,
+          processingStatus: "pending",
+          updatedAt: new Date(),
+        })
+        .where(eq(standupResponse.id, existingResponse.id))
+        .returning();
+
+      savedResponse = updated;
+      isUpdate = true;
+    } else {
+      console.log("📝 Creating new audio standup response:", {
+        userEmail: member.user.email,
+        date: today,
+      });
+
+      const [created] = await db
+        .insert(standupResponse)
+        .values({
+          id: nanoid(),
+          standupConfigId: config.id,
+          teamId: member.teamId,
+          userId: member.userId,
+          slackUserId,
+          slackMessageTs: event.ts,
+          responseDate: today,
+          responses: {},
+          responseType: "voice",
+          voiceUrl,
+          voiceDurationSeconds: durationSeconds,
+          processingStatus: "pending",
+        })
+        .returning();
+
+      savedResponse = created;
+    }
+
+    // Send immediate acknowledgment
+    await sendSlackDM(
+      workspace.botToken,
+      slackUserId,
+      `🎤 Got your audio${isUpdate ? " update" : ""}! Transcribing and processing...`
+    );
+
+    // Queue for worker processing with audio_standup type
+    console.log("📤 Sending audio to SQS:", {
+      type: "audio_standup",
+      responseId: savedResponse.id,
+      teamId: member.teamId,
+      isUpdate,
+    });
+
+    await sendToSQS({
+      type: "audio_standup",
+      responseId: savedResponse.id,
+      userId: member.userId,
+      teamId: member.teamId,
+      organizationId: member.team.organizationId,
+    });
+
+    console.log(
+      `✅ ${isUpdate ? "Updated" : "Saved"} audio standup from ${member.user.email} and sent to SQS`
+    );
+  } catch (error) {
+    console.error("Error handling audio standup response:", error);
   }
 }
 

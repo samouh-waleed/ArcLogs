@@ -8,4 +8,9 @@ dependencies = [
     "agno>=2.3.21",
     "boto3>=1.42.22",
     "psycopg2-binary>=2.9.11",
+    "openai>=1.0.0",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.0",
+    "nanoid>=2.0.0",
+    "pgvector>=0.3.0",
 ]
