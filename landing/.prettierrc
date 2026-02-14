@@ -6,6 +6,5 @@
   "singleQuote": true,
   "printWidth": 80,
   "jsxSingleQuote": false,
-  "plugins": ["prettier-plugin-tailwindcss"],
-  "organizeImportsSkipDestructiveCodeActions": true
+  "plugins": ["prettier-plugin-tailwindcss"]
 }

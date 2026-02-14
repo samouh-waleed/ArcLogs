@@ -1,10 +1,10 @@
-import ZippayCtaSection from '@/components/sections/zippay-cta-section';
+import ArcLogsFeatureQuad from '@/components/sections/ArcLogsFeatureQuad';
 import FeaturesSection from '@/components/sections/features-section';
 import ZippayHero from '@/components/sections/hero';
-import ArcLogsFeatureQuad from '@/components/sections/ArcLogsFeatureQuad';
 import HowItWorksSection from '@/components/sections/HowItWorksSection';
 // Import your newly created section
 import InsightsSection from '@/components/sections/InsightsSection';
+import ZippayCtaSection from '@/components/sections/zippay-cta-section';
 
 export default function Home() {
   return (

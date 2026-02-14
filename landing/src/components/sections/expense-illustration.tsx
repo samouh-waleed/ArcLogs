@@ -26,7 +26,7 @@ export default function ExpenseIllustration({
     show: {
       opacity: 1,
       x: 0,
-      transition: { duration, ease: [0.22, 1, 0.36, 1], delay },
+      transition: { duration, ease: [0.22, 1, 0.36, 1] as const, delay },
     },
   });
 

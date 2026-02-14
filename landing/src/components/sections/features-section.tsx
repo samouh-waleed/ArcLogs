@@ -1,8 +1,8 @@
 'use client';
 
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion } from 'motion/react';
 
 type BigCard = {
   imageSrc: string;
@@ -112,12 +112,12 @@ Manage money quickly, easily & efficiently. Whether you’re alone or leading a 
                 <article
                   key={i}
                   // UPDATED: Removed border, added shadow-xl for popped-up effect
-                  className="bg-gray-0 flex flex-col gap-4 rounded-[16px] p-4 shadow-xl hover:shadow-2xl transition-shadow duration-300 overflow-hidden group"
+                  className="bg-gray-0 group flex flex-col gap-4 overflow-hidden rounded-[16px] p-4 shadow-xl transition-shadow duration-300 hover:shadow-2xl"
                 >
-                  <div className="bg-gray-50 rounded-[12px] overflow-hidden">
+                  <div className="overflow-hidden rounded-[12px] bg-gray-50">
                     {/* ANIMATED IMAGE CONTAINER */}
                     <motion.div
-                      className="relative w-full aspect-video"
+                      className="relative aspect-video w-full"
                       // Entrance Animation: Slide Up + Fade In
                       initial={{ opacity: 0, y: 40, scale: 0.95 }}
                       whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -168,7 +168,7 @@ Manage money quickly, easily & efficiently. Whether you’re alone or leading a 
                 <article
                   key={i}
                   // UPDATED: Removed border, added shadow-xl
-                  className="bg-gray-0 flex flex-col gap-6 rounded-[16px] p-6 shadow-xl hover:shadow-2xl transition-shadow duration-300"
+                  className="bg-gray-0 flex flex-col gap-6 rounded-[16px] p-6 shadow-xl transition-shadow duration-300 hover:shadow-2xl"
                 >
                   <Image
                     src={card.iconSrc}

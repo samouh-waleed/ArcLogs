@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -32,9 +33,9 @@ export default function ZippayCtaCard({
     >
       <div className="container">
         {/* Changed bg-primary-300 (green) to bg-blue-900 (brand dark blue) */}
-        <div className="bg-[#001f3f] rounded-[24px] px-6 py-12 text-white shadow-xl lg:rounded-[28px] lg:py-20">
+        <div className="rounded-[24px] bg-[#001f3f] px-6 py-12 text-white shadow-xl lg:rounded-[28px] lg:py-20">
           <div className="mx-auto flex max-w-4xl flex-col items-center justify-center text-center">
-            <h2 className="text-heading-1 max-w-[637px] tracking-tight text-white leading-tight">
+            <h2 className="text-heading-1 max-w-[637px] leading-tight tracking-tight text-white">
               {title}
             </h2>
             <p className="text-body-md sm:text-body-lg mx-auto mt-4 max-w-2xl text-white/80">
@@ -43,7 +44,7 @@ export default function ZippayCtaCard({
             <div className="mt-8 flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Button
                 asChild
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white border-none sm:w-auto"
+                className="w-full border-none bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
                 variant="default"
               >
                 <Link href={primaryHref}>{primaryLabel}</Link>

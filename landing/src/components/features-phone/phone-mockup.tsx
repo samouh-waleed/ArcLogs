@@ -1,6 +1,14 @@
 'use client';
 
-import { Bell, ChevronDown, Home, CreditCard, MessageSquare, Activity, User } from 'lucide-react';
+import {
+  Activity,
+  Bell,
+  ChevronDown,
+  CreditCard,
+  Home,
+  MessageSquare,
+  User,
+} from 'lucide-react';
 
 type PhoneMockupProps = {
   className?: string;
@@ -33,19 +41,23 @@ export default function PhoneMockup({ className = '' }: PhoneMockupProps) {
             </div>
 
             {/* Notch */}
-            <div className="absolute left-1/2 top-0 h-6 w-28 -translate-x-1/2 rounded-b-2xl bg-gray-900" />
+            <div className="absolute top-0 left-1/2 h-6 w-28 -translate-x-1/2 rounded-b-2xl bg-gray-900" />
 
             {/* App Header */}
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-200">
-                  <span className="text-[10px] font-medium text-gray-600">AT</span>
+                  <span className="text-[10px] font-medium text-gray-600">
+                    AT
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="flex h-5 w-5 items-center justify-center rounded bg-blue-600">
                     <span className="text-[8px] font-bold text-white">A</span>
                   </div>
-                  <span className="text-xs font-semibold text-gray-900">Arc Logs</span>
+                  <span className="text-xs font-semibold text-gray-900">
+                    Arc Logs
+                  </span>
                 </div>
               </div>
               <Bell className="h-4 w-4 text-gray-500" />
@@ -55,7 +67,9 @@ export default function PhoneMockup({ className = '' }: PhoneMockupProps) {
             <div className="border-b border-gray-100 px-4 py-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold text-gray-900">Team Activity</span>
+                  <span className="text-xs font-semibold text-gray-900">
+                    Team Activity
+                  </span>
                   <ChevronDown className="h-3 w-3 text-gray-500" />
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5">
@@ -71,14 +85,22 @@ export default function PhoneMockup({ className = '' }: PhoneMockupProps) {
               <div className="rounded-lg bg-gray-50 p-2">
                 <div className="flex items-start gap-2">
                   <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100">
-                    <span className="text-[8px] font-medium text-green-700">AT</span>
+                    <span className="text-[8px] font-medium text-green-700">
+                      AT
+                    </span>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-semibold text-gray-900">Arthur Taylor</span>
-                      <span className="text-[8px] text-gray-400">Yesterday at 8:30 pm</span>
+                      <span className="text-[10px] font-semibold text-gray-900">
+                        Arthur Taylor
+                      </span>
+                      <span className="text-[8px] text-gray-400">
+                        Yesterday at 8:30 pm
+                      </span>
                     </div>
-                    <p className="mt-0.5 text-[8px] text-green-600">✓ All other members took on track</p>
+                    <p className="mt-0.5 text-[8px] text-green-600">
+                      ✓ All other members took on track
+                    </p>
                   </div>
                 </div>
               </div>
@@ -90,8 +112,12 @@ export default function PhoneMockup({ className = '' }: PhoneMockupProps) {
                     <span className="text-[8px]">🤖</span>
                   </div>
                   <div className="flex-1">
-                    <span className="text-[8px] font-medium text-gray-500">Arthur Taylor</span>
-                    <span className="ml-1 text-[8px] text-gray-400">Yesterday at 8:30 pm</span>
+                    <span className="text-[8px] font-medium text-gray-500">
+                      Arthur Taylor
+                    </span>
+                    <span className="ml-1 text-[8px] text-gray-400">
+                      Yesterday at 8:30 pm
+                    </span>
                     <ul className="mt-0.5 space-y-0 text-[8px] text-gray-600">
                       <li>• Automatically surface blockers,</li>
                       <li>sentiment, and key themes from daily</li>

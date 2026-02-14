@@ -10,7 +10,7 @@ export default function SentimentAnalysisCard({
 }) {
   return (
     <div
-      className={`bg-white rounded-xl shadow-2xl p-4 w-full max-w-[240px] ${className}`}
+      className={`w-full max-w-[240px] rounded-xl bg-white p-4 shadow-2xl ${className}`}
     >
       <h3 className="mb-2 text-xs font-semibold text-gray-900">
         Sentiment Analysis
@@ -18,10 +18,7 @@ export default function SentimentAnalysisCard({
 
       <div className="mb-3 h-16 w-full">
         {/* Simple SVG Line Chart */}
-        <svg
-          viewBox="0 0 100 40"
-          className="h-full w-full overflow-visible"
-        >
+        <svg viewBox="0 0 100 40" className="h-full w-full overflow-visible">
           <path
             d="M0,10 Q20,5 40,25 T80,15 T100,35"
             fill="none"
@@ -34,7 +31,7 @@ export default function SentimentAnalysisCard({
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-gray-900 whitespace-nowrap">
+        <span className="text-xs font-medium whitespace-nowrap text-gray-900">
           Team Morale:
         </span>
 
@@ -43,7 +40,7 @@ export default function SentimentAnalysisCard({
           -15%
         </div>
 
-        <span className="whitespace-nowrap text-[10px] text-gray-400">
+        <span className="text-[10px] whitespace-nowrap text-gray-400">
           (Last 7 Days)
         </span>
       </div>

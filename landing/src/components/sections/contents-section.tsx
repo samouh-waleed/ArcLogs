@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 import ContentIllustration from './content-illustration1';
@@ -41,7 +40,10 @@ export default function ZippayContentsSection({
   items = DEFAULT_ITEMS,
 }: ZippayContentsSectionProps) {
   return (
-    <section id="arclogs-contents" className="px-6 py-10 lg:py-24 bg-background">
+    <section
+      id="arclogs-contents"
+      className="bg-background px-6 py-10 lg:py-24"
+    >
       <div className="container space-y-32 lg:space-y-48">
         {items.map((item, i) => {
           // Cleaned up imageBlock: Removed invalid props to fix TypeScript error
@@ -57,16 +59,16 @@ export default function ZippayContentsSection({
 
           const textBlock = (
             <div className="max-w-[616px]">
-              <span className="text-body-sm-medium bg-white inline-flex h-8 items-center gap-2 rounded-[10px] border border-gray-100 px-3 py-0 leading-none shadow-sm">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <span className="text-body-sm-medium inline-flex h-8 items-center gap-2 rounded-[10px] border border-gray-100 bg-white px-3 py-0 leading-none shadow-sm">
+                <div className="bg-primary h-1.5 w-1.5 rounded-full" />
                 {item.tagline}
               </span>
 
-              <h2 className="text-foreground text-heading-1 mt-6 tracking-tight lg:text-[64px] leading-[1.1]">
+              <h2 className="text-foreground text-heading-1 mt-6 leading-[1.1] tracking-tight lg:text-[64px]">
                 {item.title}
               </h2>
 
-              <p className="text-body-lg mt-6 max-w-prose text-gray-500 leading-relaxed">
+              <p className="text-body-lg mt-6 max-w-prose leading-relaxed text-gray-500">
                 {item.description}
               </p>
             </div>
@@ -88,7 +90,12 @@ export default function ZippayContentsSection({
                 {textBlock}
               </div>
 
-              <div className={cn('order-2', reversed && 'lg:order-1 flex justify-center')}>
+              <div
+                className={cn(
+                  'order-2',
+                  reversed && 'flex justify-center lg:order-1',
+                )}
+              >
                 {imageBlock}
               </div>
             </div>

@@ -1,10 +1,9 @@
+import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { google } from 'googleapis';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resendApiKey = process.env.RESEND_API_KEY;
 
-// Google Sheets setup
 const auth = new google.auth.GoogleAuth({
   credentials: {
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -15,9 +14,8 @@ const auth = new google.auth.GoogleAuth({
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json();
+    const { email } = (await request.json()) as { email?: string };
 
-    // Better email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
       return NextResponse.json(
@@ -26,23 +24,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize email (lowercase, trim)
     const normalizedEmail = email.toLowerCase().trim();
-
-    // Add to Google Sheets
-    const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
     if (spreadsheetId) {
       try {
-        // Check for duplicates
+        const sheets = google.sheets({ version: 'v4', auth });
+
         const existingData = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range: 'Sheet1!A:A',
         });
 
         const existingEmails =
-          existingData.data.values?.flat().map((e) => e.toLowerCase()) || [];
+          existingData.data.values
+            ?.flat()
+            .map((e) => String(e).toLowerCase()) ?? [];
 
         if (existingEmails.includes(normalizedEmail)) {
           return NextResponse.json(
@@ -51,7 +48,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // Add new email
         await sheets.spreadsheets.values.append({
           spreadsheetId,
           range: 'Sheet1!A:B',
@@ -60,13 +56,20 @@ export async function POST(request: Request) {
             values: [[normalizedEmail, new Date().toISOString()]],
           },
         });
-      } catch (sheetError) {
-        console.error('Google Sheets error:', sheetError);
+      } catch {
         // Continue even if sheets fails
       }
     }
 
-    // Send email via Resend
+    if (!resendApiKey) {
+      return NextResponse.json(
+        { error: 'Email service is not configured' },
+        { status: 500 },
+      );
+    }
+
+    const resend = new Resend(resendApiKey);
+
     try {
       await resend.emails.send({
         from: 'ArcLogs <onboarding@resend.dev>',
@@ -76,8 +79,8 @@ export async function POST(request: Request) {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #333;">Thanks for Joining the ArcLogs Waitlist!</h1>
             <p style="font-size: 16px; line-height: 1.6; color: #666;">
-              We're excited to have you on board! You're now on the list to be among the first 
-              to experience ArcLogs – the async standup platform that helps distributed teams 
+              We're excited to have you on board! You're now on the list to be among the first
+              to experience ArcLogs – the async standup platform that helps distributed teams
               stay aligned without the meetings.
             </p>
             <p style="font-size: 16px; line-height: 1.6; color: #666;">
@@ -93,8 +96,7 @@ export async function POST(request: Request) {
           </div>
         `,
       });
-    } catch (emailError) {
-      console.error('Resend email error:', emailError);
+    } catch {
       return NextResponse.json(
         { error: 'Failed to send confirmation email' },
         { status: 500 },
@@ -105,8 +107,7 @@ export async function POST(request: Request) {
       success: true,
       message: 'Successfully joined waitlist',
     });
-  } catch (error) {
-    console.error('Waitlist error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to join waitlist' },
       { status: 500 },

@@ -1,23 +1,27 @@
 'use client';
 
-import * as React from 'react';
 import { motion } from 'framer-motion';
-import BlockerReportCard from '../insight-cards/BlockerReportCard';
-import SentimentAnalysisCard from '../insight-cards/SentimentAnalysisCard';
-import KeyThemesCard from '../insight-cards/KeyThemesCard';
+import * as React from 'react';
 
-export default function ContentIllustration2({ className = '' }: { className?: string }) {
+import BlockerReportCard from '../insight-cards/BlockerReportCard';
+import KeyThemesCard from '../insight-cards/KeyThemesCard';
+import SentimentAnalysisCard from '../insight-cards/SentimentAnalysisCard';
+
+export default function ContentIllustration2({
+  className = '',
+}: {
+  className?: string;
+}) {
   return (
-    <div className={`relative w-full max-w-[600px] mx-auto pt-10 min-h-[550px] ${className}`}>
-      
+    <div
+      className={`relative mx-auto min-h-[550px] w-full max-w-[600px] pt-10 ${className}`}
+    >
       {/* Light Blue Background Panel - Holds all three cards */}
-      <div 
-        className="absolute left-[10%] top-0 w-[90%] h-full bg-[#f0f7ff] rounded-[2rem] -z-10 shadow-sm" 
-      />
+      <div className="absolute top-0 left-[10%] -z-10 h-full w-[90%] rounded-[2rem] bg-[#f0f7ff] shadow-sm" />
 
       {/* 1. Blocker Report Card - Positioned lower within the panel */}
       <motion.div
-        className="absolute left-[12%] top-[12%] z-20 w-full max-w-[280px]"
+        className="absolute top-[12%] left-[12%] z-20 w-full max-w-[280px]"
         initial={{ opacity: 0, y: -20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
@@ -28,7 +32,7 @@ export default function ContentIllustration2({ className = '' }: { className?: s
 
       {/* 2. Sentiment Analysis Card - Shifted right with popout shadow */}
       <motion.div
-        className="absolute right-[-8%] top-[45%] z-30 w-full max-w-[240px]"
+        className="absolute top-[45%] right-[-8%] z-30 w-full max-w-[240px]"
         initial={{ opacity: 0, x: 20 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true }}
@@ -39,7 +43,7 @@ export default function ContentIllustration2({ className = '' }: { className?: s
 
       {/* 3. Key Themes Card - Bottom-left staggered position */}
       <motion.div
-        className="absolute left-[-5%] bottom-[8%] z-40 w-full max-w-[210px]"
+        className="absolute bottom-[8%] left-[-5%] z-40 w-full max-w-[210px]"
         initial={{ opacity: 0, x: -20 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true }}
