@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ArrowLeft,
   Edit,
@@ -24,6 +25,10 @@ import {
   Shield,
   User,
   TrendingUp,
+  Send,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -46,6 +51,11 @@ export default function TeamDetailPage() {
   const [team, setTeam] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerMessage, setTriggerMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadTeam() {
@@ -84,6 +94,42 @@ export default function TeamDetailPage() {
       console.error("Failed to delete team:", error);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleTriggerStandup = async () => {
+    setTriggering(true);
+    setTriggerMessage(null);
+    try {
+      const response = await fetch(`/api/teams/${teamId}/trigger-standup`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTriggerMessage({
+          type: "success",
+          text: data.message || `Sent ${data.sent} standup prompt(s)!`,
+        });
+      } else {
+        setTriggerMessage({
+          type: "error",
+          text: data.error || "Failed to trigger standup",
+        });
+      }
+
+      // Clear message after 5 seconds
+      setTimeout(() => setTriggerMessage(null), 5000);
+    } catch (error) {
+      console.error("Failed to trigger standup:", error);
+      setTriggerMessage({
+        type: "error",
+        text: "Network error - failed to trigger standup",
+      });
+      setTimeout(() => setTriggerMessage(null), 5000);
+    } finally {
+      setTriggering(false);
     }
   };
 
@@ -160,6 +206,30 @@ export default function TeamDetailPage() {
         </div>
       </div>
 
+      {triggerMessage && (
+        <Alert
+          variant={triggerMessage.type === "error" ? "destructive" : "default"}
+          className={
+            triggerMessage.type === "success"
+              ? "bg-green-50 border-green-200"
+              : undefined
+          }
+        >
+          {triggerMessage.type === "success" ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+          <AlertDescription
+            className={
+              triggerMessage.type === "success" ? "text-green-800" : undefined
+            }
+          >
+            {triggerMessage.text}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -178,13 +248,34 @@ export default function TeamDetailPage() {
             <CardTitle className="text-sm font-medium">Standups</CardTitle>
             <Settings className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <div className="text-2xl font-bold">
               {team.standupConfigs?.length || 0}
             </div>
-            <Button variant="link" className="p-0 h-auto text-xs" asChild>
-              <Link href={`/teams/${team.id}/standups`}>Manage standups →</Link>
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button variant="link" className="p-0 h-auto text-xs justify-start" asChild>
+                <Link href={`/teams/${team.id}/standups`}>Manage standups →</Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTriggerStandup}
+                disabled={triggering || (team.standupConfigs?.length || 0) === 0}
+                className="w-full"
+              >
+                {triggering ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-3 w-3" />
+                    Test Standup
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

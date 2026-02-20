@@ -193,6 +193,70 @@ export const slackWorkspace = pgTable(
 );
 
 // ============================================
+// JIRA INTEGRATION
+// ============================================
+
+export const jiraConnection = pgTable(
+  "jira_connection",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jiraDomain: text("jira_domain").notNull(), // e.g., "company.atlassian.net"
+    jiraEmail: text("jira_email").notNull(), // Email for API auth
+    jiraApiToken: text("jira_api_token").notNull(), // Encrypted API token
+    defaultProjectKey: text("default_project_key"), // e.g., "PROJ"
+    defaultIssueType: text("default_issue_type").default("Task"), // Bug, Story, Task, etc.
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("jira_connection_orgId_uidx").on(table.organizationId),
+    index("jira_connection_deletedAt_idx").on(table.deletedAt),
+  ]
+);
+
+export const jiraLink = pgTable(
+  "jira_link",
+  {
+    id: text("id").primaryKey(),
+    standupResponseId: text("standup_response_id")
+      .notNull()
+      .references(() => standupResponse.id, { onDelete: "cascade" }),
+    jiraIssueKey: text("jira_issue_key").notNull(), // e.g., "PROJ-123"
+    jiraIssueId: text("jira_issue_id"), // Jira's internal numeric ID
+    jiraIssueUrl: text("jira_issue_url"), // Full URL to the issue
+    blockerHash: text("blocker_hash"), // Hash of blocker text for deduplication
+    actionType: text("action_type").notNull(), // create, update, comment
+    syncedAt: timestamp("synced_at").defaultNow().notNull(),
+    jiraResponse: jsonb("jira_response"), // Full API response for debugging
+    errorMessage: text("error_message"), // If sync failed
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    // Idempotency constraint: prevent duplicate tickets on response edits
+    uniqueIndex("jira_link_idempotency_uidx").on(
+      table.standupResponseId,
+      table.blockerHash,
+      table.actionType
+    ),
+    index("jira_link_responseId_idx").on(table.standupResponseId),
+    index("jira_link_issueKey_idx").on(table.jiraIssueKey),
+    index("jira_link_actionType_idx").on(table.actionType),
+  ]
+);
+
+// ============================================
 // TEAMS & STANDUPS
 // ============================================
 
@@ -467,6 +531,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
   invitations: many(invitation),
   teams: many(team),
   slackWorkspaces: many(slackWorkspace),
+  jiraConnections: many(jiraConnection),
   subscriptions: many(subscription),
 }));
 
@@ -474,6 +539,20 @@ export const slackWorkspaceRelations = relations(slackWorkspace, ({ one }) => ({
   organization: one(organization, {
     fields: [slackWorkspace.organizationId],
     references: [organization.id],
+  }),
+}));
+
+export const jiraConnectionRelations = relations(jiraConnection, ({ one }) => ({
+  organization: one(organization, {
+    fields: [jiraConnection.organizationId],
+    references: [organization.id],
+  }),
+}));
+
+export const jiraLinkRelations = relations(jiraLink, ({ one }) => ({
+  standupResponse: one(standupResponse, {
+    fields: [jiraLink.standupResponseId],
+    references: [standupResponse.id],
   }),
 }));
 
@@ -526,6 +605,7 @@ export const standupResponseRelations = relations(
       references: [user.id],
     }),
     helpRequests: many(helpRequest),
+    jiraLinks: many(jiraLink),
   })
 );
 

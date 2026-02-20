@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -44,7 +45,7 @@ export default function ZippayCtaSection({
         setStatus('error');
         setMessage(data.error || 'Something went wrong. Please try again.');
       }
-    } catch (error) {
+    } catch {
       setStatus('error');
       setMessage('Failed to join waitlist. Please try again.');
     }

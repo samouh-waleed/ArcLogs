@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -85,9 +84,7 @@ export default function ArcLogsPricingHero({
     <section className="bg-gray-25 px-6 py-10 lg:py-24">
       <div className="container">
         <div className="mx-auto flex max-w-3xl flex-col items-center justify-center text-center">
-          <span className="text-body-sm-medium text-primary">
-            {tagline}
-          </span>
+          <span className="text-body-sm-medium text-primary">{tagline}</span>
           <h2 className="text-foreground text-heading-1 mt-4 max-w-[616px] tracking-tight lg:text-[52px]">
             {title}
           </h2>
@@ -100,7 +97,7 @@ export default function ArcLogsPricingHero({
           {plans.map((p, i) => {
             const isHighlight = !!p.highlight;
             const isCustom = typeof p.price === 'string';
-            
+
             return (
               <div
                 key={i}
@@ -108,7 +105,7 @@ export default function ArcLogsPricingHero({
                   'rounded-2xl border p-2 shadow-sm transition-all hover:shadow-md',
                   isHighlight
                     ? 'bg-primary-300 border-white/10 text-white'
-                    : 'bg-white border-gray-50',
+                    : 'border-gray-50 bg-white',
                 )}
               >
                 <div className="p-4">
@@ -143,7 +140,8 @@ export default function ArcLogsPricingHero({
                         isHighlight ? 'text-white' : 'text-foreground',
                       )}
                     >
-                      {!isCustom && '$'}{p.price}
+                      {!isCustom && '$'}
+                      {p.price}
                     </span>
                     {p.period && (
                       <span
@@ -162,22 +160,22 @@ export default function ArcLogsPricingHero({
                       asChild
                       className={cn(
                         'w-full font-bold',
-                        isHighlight ? 'bg-white text-blue-900 hover:bg-gray-100' : 'bg-blue-600 text-white hover:bg-blue-700',
+                        isHighlight
+                          ? 'bg-white text-blue-900 hover:bg-gray-100'
+                          : 'bg-blue-600 text-white hover:bg-blue-700',
                       )}
                     >
-                      <Link href={p.href ?? '#'}>
-                        {p.ctaLabel}
-                      </Link>
+                      <Link href={p.href ?? '#'}>{p.ctaLabel}</Link>
                     </Button>
                   </div>
                 </div>
-                
+
                 <div
                   className={cn(
                     'mt-6 rounded-xl border p-5',
                     isHighlight
-                      ? 'bg-white/5 border-white/10'
-                      : 'bg-gray-50 border-gray-100',
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-gray-100 bg-gray-50',
                   )}
                 >
                   <p
@@ -197,7 +195,12 @@ export default function ArcLogsPricingHero({
                           isHighlight ? 'text-white/85' : 'text-gray-700',
                         )}
                       >
-                         <div className={cn("mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0", isHighlight ? "bg-white/60" : "bg-blue-500")} />
+                        <div
+                          className={cn(
+                            'mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full',
+                            isHighlight ? 'bg-white/60' : 'bg-blue-500',
+                          )}
+                        />
                         {f}
                       </li>
                     ))}

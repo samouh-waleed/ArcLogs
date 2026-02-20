@@ -62,7 +62,7 @@ export default function AddMembersPage() {
 
   const filteredUsers = slackUsers.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -184,12 +184,13 @@ export default function AddMembersPage() {
                 </p>
               ) : (
                 filteredUsers.map((user) => (
-                  <div
+                  <label
                     key={user.id}
+                    htmlFor={`user-${user.id}`}
                     className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer"
-                    onClick={() => toggleUser(user.id)}
                   >
                     <Checkbox
+                      id={`user-${user.id}`}
                       checked={selectedUsers.has(user.id)}
                       onCheckedChange={() => toggleUser(user.id)}
                     />
@@ -208,7 +209,7 @@ export default function AddMembersPage() {
                         </p>
                       )}
                     </div>
-                  </div>
+                  </label>
                 ))
               )}
             </div>

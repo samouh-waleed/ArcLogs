@@ -7,41 +7,42 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root, .dark {
+:root,
+.dark {
   /* Core Palette */
   --white: oklch(100% 0 0);
   --black: oklch(0% 0 0);
   /* Arc Logs Brand Blue (#0066FF) */
-  --brand-blue: oklch(55% 0.25 260); 
+  --brand-blue: oklch(55% 0.25 260);
   --brand-blue-hover: oklch(45% 0.25 260);
 
   /* Semantic Variables */
   --background: var(--white);
   --foreground: var(--black);
-  
+
   --card: var(--white);
   --card-foreground: var(--black);
-  
+
   --popover: var(--white);
   --popover-foreground: var(--black);
-  
+
   /* Primary is now our Blue */
   --primary: var(--brand-blue);
   --primary-foreground: var(--white);
-  
+
   /* Secondary is Black for high contrast */
   --secondary: var(--black);
   --secondary-foreground: var(--white);
-  
+
   --muted: oklch(96% 0 0); /* Light gray */
   --muted-foreground: oklch(45% 0 0);
-  
+
   --accent: var(--brand-blue);
   --accent-foreground: var(--white);
-  
+
   --destructive: oklch(52% 0.2 20); /* Standard Error Red */
   --destructive-foreground: var(--white);
-  
+
   --border: oklch(90% 0 0); /* Subtle gray border */
   --input: oklch(90% 0 0);
   --ring: var(--brand-blue);
@@ -49,7 +50,7 @@
   /* Overriding your existing gray scale for maximum clarity */
   --gray-0: var(--white);
   --gray-900: var(--black);
-  
+
   /* Setting the primary scale to Blue for Tailwind utilities */
   --primary-100: var(--brand-blue);
   --primary-200: var(--brand-blue-hover);

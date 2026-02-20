@@ -13,6 +13,11 @@ const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_BASE_URL || process.env.NEXT_PUBLIC_APP_URL,
+  trustedOrigins: [
+    process.env.NEXT_PUBLIC_APP_URL!,
+    process.env.BETTER_AUTH_BASE_URL!,
+  ].filter(Boolean),
   database: drizzleAdapter(db, {
     provider: "pg",
   }),

@@ -1,7 +1,7 @@
 // app/(auth)/create-organization/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Building2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function slugify(text: string): string {
   return text
@@ -29,6 +30,50 @@ export default function CreateOrganizationPage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [checkingOrgs, setCheckingOrgs] = useState(true);
+
+  const { data: session } = authClient.useSession();
+  const { data: activeOrg } = authClient.useActiveOrganization();
+
+  // Check if user already has an organization and set it as active
+  useEffect(() => {
+    async function checkExistingOrganizations() {
+      if (!session?.user) {
+        setCheckingOrgs(false);
+        return;
+      }
+
+      try {
+        const { data: orgs } = await authClient.organization.list();
+
+        if (orgs && orgs.length > 0) {
+          // User has organizations, set the first one as active
+          const firstOrg = orgs[0];
+          await authClient.organization.setActive({
+            organizationId: firstOrg.id,
+          });
+
+          // Redirect to dashboard
+          router.push("/");
+          return;
+        }
+
+        setCheckingOrgs(false);
+      } catch (err) {
+        console.error("Error checking organizations:", err);
+        setCheckingOrgs(false);
+      }
+    }
+
+    if (session && !activeOrg) {
+      checkExistingOrganizations();
+    } else if (activeOrg) {
+      // Already has active org, redirect to dashboard
+      router.push("/");
+    } else {
+      setCheckingOrgs(false);
+    }
+  }, [session, activeOrg, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +106,20 @@ export default function CreateOrganizationPage() {
       setLoading(false);
     }
   };
+
+  if (checkingOrgs) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1 text-center">
+            <Skeleton className="h-12 w-12 mx-auto mb-4 rounded-full" />
+            <Skeleton className="h-8 w-3/4 mx-auto" />
+            <Skeleton className="h-4 w-full" />
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-12">

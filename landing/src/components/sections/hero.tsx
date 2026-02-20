@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+
 import HeroIllustration from '@/components/hero-section/HeroIllustration';
+import { Button } from '@/components/ui/button';
 
 export default function ArcLogsHero() {
-  const SIGNIN_URL = 'https://app.arclogs.com/login';
+  // const SIGNIN_URL = 'https://app.arclogs.com/login';
 
   return (
     <section

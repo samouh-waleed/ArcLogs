@@ -12,7 +12,7 @@ export default function BlockerReportCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-2xl p-4 w-full max-w-[280px] ${className}`}
+      className={`w-full max-w-[280px] rounded-xl bg-white p-4 shadow-2xl ${className}`}
     >
       <h3 className="mb-4 text-xs font-semibold text-gray-900">
         Blocker Report
@@ -21,10 +21,10 @@ export default function BlockerReportCard({
       <div className="relative flex h-32 items-end justify-between gap-2 px-1">
         {/* Tooltip for the critical issue */}
         <div className="absolute top-0 left-[45%] z-10 -translate-x-1/2">
-          <div className="whitespace-nowrap rounded bg-[#1e293b] px-2 py-1 text-[10px] text-white shadow-lg">
+          <div className="rounded bg-[#1e293b] px-2 py-1 text-[10px] whitespace-nowrap text-white shadow-lg">
             API Access Issue (Critical) - 2 days
           </div>
-          <div className="mx-auto h-0 w-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-[#1e293b]" />
+          <div className="mx-auto h-0 w-0 border-t-[4px] border-r-[4px] border-l-[4px] border-t-[#1e293b] border-r-transparent border-l-transparent" />
         </div>
 
         {bars.map((height, i) => (
