@@ -18,18 +18,39 @@ ArcLogs/
 
 ## Quick Start
 
-### Application (Next.js)
+### Prerequisites
+- Node.js 18+
+- Python 3.12+
+- PostgreSQL (Neon recommended)
+- AWS account (for SQS)
+- OpenAI API key
+- Slack workspace (for bot installation)
+
+### Setup
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/samouh-waleed/ArcLogs.git
+cd ArcLogs
+```
+
+2. **Configure Application**
 ```bash
 cd application
 npm install
-npm run dev          # Dev server on port 3000
+cp .env.example .env
+# Edit .env with your credentials
 npm run db:push      # Push schema to Neon PostgreSQL
+npm run dev          # Dev server on port 3000
 ```
 
-### Worker (Python)
+3. **Configure Worker**
 ```bash
-cd worker
+cd ../worker
 uv sync              # Install dependencies
+cp .env.example .env
+# Edit .env with your credentials
+uv run python migrations/run_migrations.py  # Setup database
 uv run python main.py    # Start SQS worker
 ```
 
