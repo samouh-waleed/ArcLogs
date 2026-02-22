@@ -171,9 +171,9 @@ export default function TeamDetailPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <Link href={`/teams/${team.id}/edit`}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
+            <Link href={`/teams/${team.id}/settings`}>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
             </Link>
           </Button>
           <AlertDialog>
@@ -282,13 +282,24 @@ export default function TeamDetailPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Channel</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             {team.slackChannelName ? (
-              <div className="text-sm">#{team.slackChannelName}</div>
+              <>
+                <div className="text-lg font-semibold">#{team.slackChannelName}</div>
+                <p className="text-xs text-muted-foreground">
+                  Daily digests posted here
+                </p>
+              </>
             ) : (
               <div className="text-sm text-muted-foreground">Not set</div>
             )}
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link href={`/teams/${team.id}/settings`}>
+                {team.slackChannelName ? "Change Channel" : "Select Channel"}
+              </Link>
+            </Button>
           </CardContent>
         </Card>
 

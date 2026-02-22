@@ -5,6 +5,7 @@ import { standupConfig, team, member } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { canUseVoice } from "@/lib/limits";
 
 export async function GET(
   req: NextRequest,
@@ -102,6 +103,14 @@ export async function PUT(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    // Plan gate: clamp voice to false for free orgs
+    const voiceAllowed = await canUseVoice(existingStandup.team.organizationId);
+    const effectiveVoice = voiceAllowed
+      ? body.allowVoiceResponses !== undefined
+        ? body.allowVoiceResponses
+        : existingStandup.allowVoiceResponses
+      : false;
+
     const [updatedStandup] = await db
       .update(standupConfig)
       .set({
@@ -113,10 +122,7 @@ export async function PUT(
         scheduleTime: body.scheduleTime || existingStandup.scheduleTime,
         scheduleDays: body.scheduleDays || existingStandup.scheduleDays,
         questions: body.questions || existingStandup.questions,
-        allowVoiceResponses:
-          body.allowVoiceResponses !== undefined
-            ? body.allowVoiceResponses
-            : existingStandup.allowVoiceResponses,
+        allowVoiceResponses: effectiveVoice,
         reminderMinutes:
           body.reminderMinutes !== undefined
             ? body.reminderMinutes

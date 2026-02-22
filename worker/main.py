@@ -397,6 +397,27 @@ def get_jira_connection(cur, organization_id: str) -> Optional[Dict]:
     return cur.fetchone()
 
 
+def get_org_plan(cur, organization_id: str) -> str:
+    """Return active plan name ('free', 'pro', 'enterprise') for the given org.
+
+    Mirrors lib/limits.ts getOrgPlan(). Reads subscription.plan for the most
+    recent active or trialing subscription. Falls back to 'free'.
+    """
+    cur.execute("""
+        SELECT plan
+        FROM subscription
+        WHERE reference_id = %s
+          AND status IN ('active', 'trialing')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (organization_id,))
+    row = cur.fetchone()
+    if not row or not row["plan"]:
+        return "free"
+    plan = row["plan"]
+    return plan if plan in ("pro", "enterprise") else "free"
+
+
 # Check if Jira link already exists (idempotency)
 def check_existing_jira_link(
     cur,
@@ -1259,6 +1280,24 @@ def process_audio_standup(message_data: Dict):
 
         bot_token = workspace["bot_token"]
 
+        # ── Voice feature gate ────────────────────────────────────────────
+        org_plan = get_org_plan(cur, response_data["organization_id"])
+        if org_plan == "free":
+            print(f"⛔ Voice standups not available on free plan (org {response_data['organization_id']})")
+            send_slack_notification(
+                bot_token,
+                response_data["slack_user_id"],
+                "⚠️ *Voice standups require a Pro plan.*\n\nPlease type your standup response, or upgrade your plan to use voice.",
+            )
+            cur.execute("""
+                UPDATE standup_response
+                SET processing_status = 'failed', updated_at = NOW()
+                WHERE id = %s
+            """, (response_id,))
+            conn.commit()
+            return
+        # ── End voice gate ────────────────────────────────────────────────
+
         # Step 1: Download audio from Slack
         print(f"📥 Downloading audio from Slack...")
         audio_bytes, content_type = download_slack_file(voice_url, bot_token)
@@ -1509,6 +1548,16 @@ def process_standup_response(message_data: Dict):
         if not jira_connection:
             jira_connection = get_jira_connection(cur, response_data["organization_id"])
         jira_results = []
+
+        # ── Jira feature gate ─────────────────────────────────────────────
+        # Nulling jira_connection disables both sync_to_jira and task
+        # transitions below, since both blocks are gated on `if jira_connection`.
+        if jira_connection:
+            org_plan = get_org_plan(cur, response_data["organization_id"])
+            if org_plan == "free":
+                print(f"⛔ Jira integration not available on free plan (org {response_data['organization_id']})")
+                jira_connection = None
+        # ── End Jira gate ─────────────────────────────────────────────────
 
         if jira_connection:
             print(f"🔧 Jira connection found, syncing...")

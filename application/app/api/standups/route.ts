@@ -6,7 +6,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
-import { checkStandupLimit } from "@/lib/limits";
+import { checkStandupLimit, canUseVoice } from "@/lib/limits";
 
 export async function GET(req: NextRequest) {
   try {
@@ -133,6 +133,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Plan gate: clamp voice to false for free orgs regardless of what was sent
+    const voiceAllowed = await canUseVoice(teamData.organizationId);
+    const effectiveVoice = voiceAllowed
+      ? allowVoiceResponses !== undefined
+        ? allowVoiceResponses
+        : true
+      : false;
+
     const [newStandup] = await db
       .insert(standupConfig)
       .values({
@@ -143,8 +151,7 @@ export async function POST(req: NextRequest) {
         scheduleTime,
         scheduleDays: scheduleDays || [1, 2, 3, 4, 5],
         questions,
-        allowVoiceResponses:
-          allowVoiceResponses !== undefined ? allowVoiceResponses : true,
+        allowVoiceResponses: effectiveVoice,
         reminderMinutes: reminderMinutes || 30,
         isActive: true,
       })

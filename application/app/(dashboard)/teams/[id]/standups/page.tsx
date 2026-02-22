@@ -80,17 +80,16 @@ export default function StandupsPage() {
   const handleTest = async (standupId: string) => {
     setTesting(standupId);
     try {
-      const response = await fetch("/api/cron/trigger-standup", {
+      const response = await fetch(`/api/teams/${params.id}/trigger-standup`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ standupConfigId: standupId }),
       });
 
       if (response.ok) {
         const data = await response.json();
         alert(`✅ Sent test standup to ${data.sent} team member(s)`);
       } else {
-        alert("❌ Failed to send test standup");
+        const errorData = await response.json();
+        alert(`❌ Failed to send test standup: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Failed to test standup:", error);

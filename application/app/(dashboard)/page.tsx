@@ -21,17 +21,28 @@ import {
   Users,
   MessageSquare,
   TrendingUp,
+  Crown,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import Link from "next/link";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [slackWorkspace, setSlackWorkspace] = useState<any>(null);
   const [loadingSlack, setLoadingSlack] = useState(true);
+  const [jiraConnected, setJiraConnected] = useState(false);
+  const [loadingJira, setLoadingJira] = useState(true);
+  const [teamsCount, setTeamsCount] = useState(0);
+  const [membersCount, setMembersCount] = useState(0);
+  const [standupsCount, setStandupsCount] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [usage, setUsage] = useState<any>(null);
 
   const { data: session, isPending: isLoadingSession } =
     authClient.useSession();
@@ -79,6 +90,87 @@ export default function DashboardPage() {
     }
 
     loadSlackWorkspace();
+  }, [activeOrg?.id]);
+
+  // Load Jira connection status
+  useEffect(() => {
+    async function loadJiraConnection() {
+      if (!activeOrg?.id) return;
+
+      try {
+        const response = await fetch(`/api/jira/connection?orgId=${activeOrg.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setJiraConnected(!!data.connection);
+        }
+      } catch (error) {
+        console.error("Failed to load Jira connection:", error);
+      } finally {
+        setLoadingJira(false);
+      }
+    }
+
+    loadJiraConnection();
+  }, [activeOrg?.id]);
+
+  // Load plan + usage limits
+  useEffect(() => {
+    if (!activeOrg?.id) return;
+    fetch(`/api/organization-usage?orgId=${activeOrg.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setUsage(data); })
+      .catch(() => {});
+  }, [activeOrg?.id]);
+
+  // Load dashboard statistics
+  useEffect(() => {
+    async function loadStats() {
+      if (!activeOrg?.id) return;
+
+      try {
+        // Load teams count
+        const teamsResponse = await fetch(`/api/teams?orgId=${activeOrg.id}`);
+        if (teamsResponse.ok) {
+          const teamsData = await teamsResponse.json();
+          setTeamsCount(teamsData.teams?.length || 0);
+
+          // If there are teams, count members and standups
+          if (teamsData.teams?.length > 0) {
+            let totalMembers = 0;
+            let totalStandups = 0;
+
+            for (const team of teamsData.teams) {
+              // Count members
+              const membersResponse = await fetch(
+                `/api/teams/${team.id}/members`
+              );
+              if (membersResponse.ok) {
+                const membersData = await membersResponse.json();
+                totalMembers += membersData.members?.length || 0;
+              }
+
+              // Count standups
+              const standupsResponse = await fetch(
+                `/api/standups?teamId=${team.id}`
+              );
+              if (standupsResponse.ok) {
+                const standupsData = await standupsResponse.json();
+                totalStandups += standupsData.standups?.length || 0;
+              }
+            }
+
+            setMembersCount(totalMembers);
+            setStandupsCount(totalStandups);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load statistics:", error);
+      } finally {
+        setLoadingStats(false);
+      }
+    }
+
+    loadStats();
   }, [activeOrg?.id]);
 
   const handleConnectSlack = () => {
@@ -224,6 +316,92 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Plan status banner — free plan only */}
+      {usage && usage.plan === "free" && (() => {
+        const atLimit =
+          usage.teams.percentage >= 100 ||
+          usage.members.percentage >= 100 ||
+          usage.standups.percentage >= 100;
+        return (
+          <Card
+            className={
+              atLimit
+                ? "border-amber-300 bg-amber-50"
+                : "border-blue-200 bg-blue-50"
+            }
+          >
+            <CardContent className="py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {atLimit ? (
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                    ) : (
+                      <Crown className="h-4 w-4 shrink-0 text-blue-600" />
+                    )}
+                    <p
+                      className={`font-medium text-sm ${
+                        atLimit ? "text-amber-900" : "text-blue-900"
+                      }`}
+                    >
+                      {atLimit
+                        ? "You've reached your Free plan limits"
+                        : "You're on the Free plan"}
+                    </p>
+                  </div>
+                  <p
+                    className={`text-xs ${
+                      atLimit ? "text-amber-700" : "text-blue-700"
+                    }`}
+                  >
+                    {atLimit
+                      ? "Upgrade to Pro for unlimited teams, 50 members, voice standups, and Jira automation."
+                      : "Voice standups and Jira automation are locked. Upgrade to Pro to unlock all features."}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "Teams", ...usage.teams },
+                      { label: "Members", ...usage.members },
+                    ].map((item) => (
+                      <span
+                        key={item.label}
+                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                          item.percentage >= 100
+                            ? "bg-red-100 border-red-300 text-red-700"
+                            : item.percentage >= 80
+                            ? "bg-amber-100 border-amber-300 text-amber-700"
+                            : "bg-white/70 border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {item.label}: {item.current}/{item.limit}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Button size="sm" asChild className="shrink-0">
+                  <Link href="/billing">
+                    <Crown className="h-3 w-3 mr-1" />
+                    Upgrade
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Onboarding Checklist */}
+      {activeOrg && !loadingSlack && !loadingJira && !loadingStats && (
+        <OnboardingChecklist
+          slackConnected={!!slackWorkspace}
+          jiraConnected={jiraConnected}
+          hasTeams={teamsCount > 0}
+          hasMembers={membersCount > 0}
+          hasStandups={standupsCount > 0}
+          organizationId={activeOrg.id}
+        />
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -231,87 +409,110 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">
-              No teams created yet
-            </p>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{teamsCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {teamsCount === 0
+                    ? "No teams created yet"
+                    : `${teamsCount} team${teamsCount === 1 ? "" : "s"}`}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress value={usage.teams.percentage} className="h-1" />
+                    <p
+                      className={`text-xs ${
+                        usage.teams.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.teams.current} / {usage.teams.limit} used
+                      {usage.teams.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Updates</CardTitle>
+            <CardTitle className="text-sm font-medium">Members</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{membersCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {membersCount === 0 ? "No members yet" : "Across all teams"}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress value={usage.members.percentage} className="h-1" />
+                    <p
+                      className={`text-xs ${
+                        usage.members.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.members.current} / {usage.members.limit} used
+                      {usage.members.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Standups</CardTitle>
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">This week</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Insights</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Active insights</p>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{standupsCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {standupsCount === 0
+                    ? "No standups configured"
+                    : `Active configuration${standupsCount === 1 ? "" : "s"}`}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress
+                      value={usage.standups.percentage}
+                      className="h-1"
+                    />
+                    <p
+                      className={`text-xs ${
+                        usage.standups.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.standups.current} / {usage.standups.limit} used
+                      {usage.standups.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {!slackWorkspace && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>
-              Follow these steps to set up ArcLogs for your team
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ol className="space-y-4">
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary text-sm font-semibold">
-                  1
-                </div>
-                <div>
-                  <h4 className="font-medium">Connect Slack</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Install the ArcLogs bot in your Slack workspace
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold text-muted-foreground">
-                  2
-                </div>
-                <div>
-                  <h4 className="font-medium text-muted-foreground">
-                    Create Teams
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Organize your organization into teams
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold text-muted-foreground">
-                  3
-                </div>
-                <div>
-                  <h4 className="font-medium text-muted-foreground">
-                    Configure Standups
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Set up questions and schedule for each team
-                  </p>
-                </div>
-              </li>
-            </ol>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

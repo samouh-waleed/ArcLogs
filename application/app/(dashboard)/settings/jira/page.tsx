@@ -30,7 +30,9 @@ import {
   ExternalLink,
   Trash2,
   TestTube,
+  Lock,
 } from "lucide-react";
+import Link from "next/link";
 
 interface JiraConnection {
   id: string;
@@ -71,12 +73,24 @@ export default function JiraSettingsPage() {
     error?: string;
   } | null>(null);
 
-  // Load existing connection
+  const [jiraEnabled, setJiraEnabled] = useState<boolean | null>(null); // null = still loading
+
+  // Load existing connection + check plan
   useEffect(() => {
     async function loadConnection() {
       if (!activeOrg?.id) return;
 
       try {
+        // Check if plan allows Jira before loading anything else
+        const usageRes = await fetch(
+          `/api/organization-usage?orgId=${activeOrg.id}`
+        );
+        if (usageRes.ok) {
+          const usage = await usageRes.json();
+          setJiraEnabled(usage.features?.jira ?? false);
+          if (!usage.features?.jira) return; // skip connection fetch for free plan
+        }
+
         const response = await fetch(
           `/api/jira/connection?orgId=${activeOrg.id}`
         );
@@ -113,6 +127,7 @@ export default function JiraSettingsPage() {
           jiraDomain,
           jiraEmail,
           jiraApiToken,
+          organizationId: activeOrg?.id,
         }),
       });
 
@@ -245,11 +260,41 @@ export default function JiraSettingsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || jiraEnabled === null) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (!jiraEnabled) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Jira Integration</h1>
+          <p className="text-muted-foreground">
+            Connect your Jira workspace to automatically create tickets from standup blockers
+          </p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center text-center py-12 gap-4">
+            <div className="rounded-full bg-muted p-4">
+              <Lock className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Jira integration is a Pro feature</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Upgrade to Pro to connect Jira and unlock automatic ticket creation,
+                status transitions, and smart comments from your standups.
+              </p>
+            </div>
+            <Button asChild>
+              <Link href="/billing">Upgrade to Pro</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

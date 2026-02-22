@@ -33,31 +33,29 @@ export default function CreateOrganizationPage() {
   const [checkingOrgs, setCheckingOrgs] = useState(true);
 
   const { data: session } = authClient.useSession();
-  const { data: activeOrg } = authClient.useActiveOrganization();
 
-  // Check if user already has an organization and set it as active
+  // Always verify org membership from the server — never trust client-side
+  // cached activeOrg, which can be stale after a user switches accounts.
   useEffect(() => {
-    async function checkExistingOrganizations() {
-      if (!session?.user) {
-        setCheckingOrgs(false);
-        return;
-      }
+    if (!session?.user) {
+      setCheckingOrgs(false);
+      return;
+    }
 
+    async function checkExistingOrganizations() {
       try {
         const { data: orgs } = await authClient.organization.list();
 
         if (orgs && orgs.length > 0) {
-          // User has organizations, set the first one as active
-          const firstOrg = orgs[0];
+          // User already has orgs — set the first one active and go to dashboard.
           await authClient.organization.setActive({
-            organizationId: firstOrg.id,
+            organizationId: orgs[0].id,
           });
-
-          // Redirect to dashboard
           router.push("/");
           return;
         }
 
+        // No orgs — show the create-org form.
         setCheckingOrgs(false);
       } catch (err) {
         console.error("Error checking organizations:", err);
@@ -65,15 +63,10 @@ export default function CreateOrganizationPage() {
       }
     }
 
-    if (session && !activeOrg) {
-      checkExistingOrganizations();
-    } else if (activeOrg) {
-      // Already has active org, redirect to dashboard
-      router.push("/");
-    } else {
-      setCheckingOrgs(false);
-    }
-  }, [session, activeOrg, router]);
+    checkExistingOrganizations();
+  // Depend only on the user ID so this re-runs when the signed-in user changes,
+  // but not on every render or when activeOrg cache updates.
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
