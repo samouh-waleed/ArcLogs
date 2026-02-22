@@ -225,10 +225,64 @@ uv run python main.py  # Start worker
 ```
 
 ### Local Development
-- Use **ngrok** to expose localhost:3000 for Slack webhooks
-- Slack events endpoint: `https://<ngrok-url>/api/slack/events`
-- Set `SLACK_SIGNING_SECRET` in application .env
+- Use **ngrok** to expose localhost:3000 for Slack webhooks: `ngrok http 3000`
+- After ngrok restarts and gives a new URL, run **`npm run dev:urls`** from `application/` — this auto-updates `.env` and the Stripe webhook endpoint, then prints a copy-paste checklist for Google/Slack/Microsoft consoles
+- Script location: `application/scripts/dev-urls.mjs`
+- Auto-updated: `BETTER_AUTH_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Stripe webhook URL (+ `STRIPE_WEBHOOK_SECRET` if a new endpoint is created)
+- Manual (can't be API-automated): Google OAuth redirect URIs, Slack event/interactivity/OAuth URLs, Microsoft OAuth redirect URIs
+- After running the script: `Ctrl+C` → `npm run dev` to pick up the new `.env`
 - Debug scripts: `debug_audio.py`, `debug_sprint.py`, `debug_search.py`
+
+## Subscription Plans
+
+Plan limits are enforced in `lib/limits.ts`. The `subscription.plan` field (set by Better Auth Stripe plugin) is the source of truth. Plan names: `"free"` | `"pro"` | `"enterprise"`.
+
+| Limit / Feature | Free | Pro ($49/mo) | Enterprise ($149/mo) |
+|---|---|---|---|
+| Organizations | 1 | 1 | 5 (TODO: dynamic org limit) |
+| Teams per org | 1 | Unlimited | Unlimited |
+| Org members | 5 | 50 | Unlimited |
+| Standup configs per team | 1 | 3 | Unlimited |
+| Voice standups (Whisper) | ❌ | ✅ | ✅ |
+| Jira automation | ❌ | ✅ | ✅ |
+| History retention | 30 days | Unlimited | Unlimited |
+
+**Env vars:** `STRIPE_PRO_PRICE_ID`, `STRIPE_ENTERPRISE_PRICE_ID` (see `.env.example`)
+
+**Frontend/API feature gate helpers:** `canUseVoice(orgId)`, `canUseJira(orgId)` in `lib/limits.ts`
+
+**Voice UI gate (implemented):**
+- `POST /api/standups` and `PUT /api/standups/[id]` — `canUseVoice(orgId)` clamps `allowVoiceResponses → false` for free orgs server-side
+- `standups/new/page.tsx`, `standups/[configId]/edit/page.tsx` — fetch `features.voice` from `/api/organization-usage`, show Skeleton while loading, Lock row with "Upgrade to Pro" link for free, normal Switch for pro
+- `components/team-setup-wizard.tsx` — same pattern; uses `voiceEnabled === false` (strict) so Switch stays visible while loading (`null`)
+
+**Worker feature gates (`worker/main.py`):**
+- `get_org_plan(cur, organization_id)` — Python mirror of `getOrgPlan()`, reads `subscription.plan`
+- Voice gate in `process_audio_standup`: checked after `bot_token` is set, before `download_slack_file`. Free plan → DM user + mark response `failed` + return early.
+- Jira gate in `process_standup_response`: checked after `jira_connection` is resolved, before `sync_to_jira`. Free plan → sets `jira_connection = None`, which also skips task transitions (both blocks already gated on `if jira_connection`).
+
+**Architecture decision:** Slack workspace and Jira connection remain org-level (one per org). Teams select a channel from the org's Slack workspace. Team-level Jira project overrides (`team.jiraProjectKey`) handle the case where teams work on different Jira projects.
+
+**Dashboard upgrade prompts (implemented):**
+- `app/(dashboard)/page.tsx` — fetches `/api/organization-usage` on mount; renders a plan status banner for free orgs (amber/at-limit or blue/below-limit) with usage pills and "Upgrade" CTA → `/billing`; each stat card (Teams, Members, Standups) shows a `Progress` bar + `X/limit` text with `text-destructive` when at 100%
+- `app/(dashboard)/billing/page.tsx` — fixed `currentPlan` to read `activeSubscription.plan` instead of hardcoded `"pro"` (enterprise was misidentified); fixed usage display to handle `null` limits (`"/ ∞"`); at-limit counts shown in `text-destructive`
+
+**Stripe subscription webhook callbacks (`lib/auth.ts`):**
+- Better Auth's Stripe plugin handles all Stripe webhook events automatically at `/api/auth/[...all]` (already in `publicRoutes` — no middleware change needed)
+- `getOrgOwnerEmail(orgId)` — helper that queries `member` (role=owner) + `user` tables to get the org owner's name/email for transactional emails
+- `onSubscriptionComplete` — sends "You're on Pro/Enterprise" upgrade confirmation email via Resend listing unlocked features
+- `onSubscriptionUpdate` — logs id/org/status/plan with structured output
+- `onSubscriptionCancel` — sends "Your subscription has ended" email via Resend listing what changes on Free + a Resubscribe CTA button
+- Callbacks are wrapped in try/catch so email failures never break the webhook acknowledgement
+- Schema imports aliased: `user as userTable` added alongside existing `member as memberTable`, `subscription as subscriptionTable`
+
+**Jira UI gate (implemented):**
+- `POST /api/jira/connection` — returns 403 `{ upgradeRequired: true }` on free plan
+- `POST /api/jira/test-connection` — accepts `organizationId` in body, returns 403 on free plan
+- `app/(dashboard)/settings/jira/page.tsx` — fetches `features.jira` from `/api/organization-usage`, shows upgrade wall (Lock icon + "Upgrade to Pro" → `/billing`) on free
+- `components/team-jira-config.tsx` — same upgrade wall pattern
+
+**Enterprise multi-org:** `auth.ts` `organizationLimit` is now an async function. Returns `true` (block) if `currentOrgCount >= maxOrgs`. `maxOrgs = 5` if any of the user's existing orgs has an active/trialing `enterprise` subscription, otherwise `maxOrgs = 1`. Imports aliased as `memberTable`/`subscriptionTable` to avoid shadowing the local `member` variable in `authorizeReference`.
 
 ## Current Feature Status (Feb 2026)
 
@@ -270,6 +324,13 @@ Note: [~] = implemented but not fully end-to-end tested in production-like scena
 - [ ] Monitoring/error tracking (Sentry)
 - [ ] Unit/integration tests
 - [ ] Team analytics & reporting (sentiment trends, velocity, weekly summaries)
+
+## Multi-User / Session Isolation (fixed bugs)
+- `GET /api/slack/workspace` — added membership check (was missing, any user could see any org's Slack bot)
+- `GET /api/slack/channels` — added membership check (same issue)
+- `GET /api/jira/connection` — added membership check (same issue)
+- `create-organization/page.tsx` — removed trust in client-cached `activeOrg`; always calls `authClient.organization.list()` server-side. Previously `else if (activeOrg) { router.push("/") }` would send a new user straight to the dashboard if the auth client had stale org data from the previous user.
+- `Sidebar.tsx` `handleSignOut` — changed `router.push("/login")` to `window.location.href = "/login"` to force a full page reload, clearing all React state and auth-client in-memory caches between users.
 
 ## Conventions
 - **IDs**: nanoid for application-generated IDs, gen_random_uuid()::text in worker SQL

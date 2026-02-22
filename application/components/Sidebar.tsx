@@ -380,8 +380,15 @@ export default function Sidebar() {
     currentUserMember?.role === "owner" || currentUserMember?.role === "admin";
 
   const handleSignOut = async () => {
+    // Use a full page navigation (not router.push) so that all client-side
+    // React state and auth-client in-memory caches are completely cleared.
+    // This prevents the next user from inheriting a stale activeOrganizationId.
     await authClient.signOut({
-      fetchOptions: { onSuccess: () => router.push("/login") },
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = "/login";
+        },
+      },
     });
   };
 

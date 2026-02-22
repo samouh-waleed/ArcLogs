@@ -1,7 +1,7 @@
 // app/teams/[id]/standups/new/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Loader2,
   ArrowLeft,
@@ -29,8 +31,10 @@ import {
   Plus,
   X,
   GripVertical,
+  Lock,
 } from "lucide-react";
 import Link from "next/link";
+import { authClient } from "@/lib/auth-client";
 
 const TIMEZONES = [
   "UTC",
@@ -66,6 +70,22 @@ export default function NewStandupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const { data: activeOrg } = authClient.useActiveOrganization();
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean | null>(null);
+  const [allowVoiceResponses, setAllowVoiceResponses] = useState(true);
+
+  useEffect(() => {
+    if (!activeOrg?.id) return;
+    fetch(`/api/organization-usage?orgId=${activeOrg.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const allowed = data.features?.voice ?? false;
+        setVoiceEnabled(allowed);
+        if (!allowed) setAllowVoiceResponses(false);
+      })
+      .catch(() => setVoiceEnabled(false));
+  }, [activeOrg?.id]);
 
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -146,7 +166,7 @@ export default function NewStandupPage() {
             required: q.required,
             order: idx,
           })),
-          allowVoiceResponses: true,
+          allowVoiceResponses,
           reminderMinutes: 30,
         }),
       });
@@ -347,6 +367,52 @@ export default function NewStandupPage() {
               <Plus className="mr-2 h-4 w-4" />
               Add Question
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Voice Responses */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Voice Responses</CardTitle>
+            <CardDescription>
+              Allow team members to record audio instead of typing
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {voiceEnabled === null ? (
+              <Skeleton className="h-14 w-full" />
+            ) : !voiceEnabled ? (
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Allow Voice Responses
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Voice standups require a Pro plan.{" "}
+                    <Link href="/billing" className="text-primary underline">
+                      Upgrade to Pro
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label>Allow Voice Responses</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Team members can record audio instead of typing
+                  </p>
+                </div>
+                <Switch
+                  checked={allowVoiceResponses}
+                  onCheckedChange={setAllowVoiceResponses}
+                  disabled={loading}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 

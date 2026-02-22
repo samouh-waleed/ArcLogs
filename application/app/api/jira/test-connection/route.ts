@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { canUseJira } from "@/lib/limits";
 
 export async function POST(req: NextRequest) {
   console.log("[Jira Test] Starting test connection");
@@ -22,12 +23,13 @@ export async function POST(req: NextRequest) {
     console.log("[Jira Test] Session valid for user:", session.user.id);
 
     const body = await req.json();
-    const { jiraDomain, jiraEmail, jiraApiToken } = body;
+    const { jiraDomain, jiraEmail, jiraApiToken, organizationId } = body;
 
     console.log("[Jira Test] Request body:", {
       jiraDomain,
       jiraEmail: jiraEmail ? "***provided***" : "missing",
       jiraApiToken: jiraApiToken ? "***provided***" : "missing",
+      organizationId: organizationId || "missing",
     });
 
     if (!jiraDomain || !jiraEmail || !jiraApiToken) {
@@ -39,6 +41,17 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // Plan gate: Jira integration is Pro+ only
+    if (organizationId) {
+      const jiraAllowed = await canUseJira(organizationId);
+      if (!jiraAllowed) {
+        return NextResponse.json(
+          { success: false, error: "Jira integration requires a Pro plan.", upgradeRequired: true },
+          { status: 403 }
+        );
+      }
     }
 
     // Clean domain

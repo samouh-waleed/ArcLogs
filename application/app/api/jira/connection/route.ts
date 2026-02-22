@@ -1,11 +1,12 @@
 // app/api/jira/connection/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { jiraConnection } from "@/drizzle/schema";
+import { jiraConnection, member } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
+import { canUseJira } from "@/lib/limits";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,6 +26,19 @@ export async function GET(req: NextRequest) {
         { error: "Organization ID required" },
         { status: 400 }
       );
+    }
+
+    // Verify the requesting user belongs to this org
+    const membership = await db.query.member.findFirst({
+      where: and(
+        eq(member.organizationId, orgId),
+        eq(member.userId, session.user.id),
+        isNull(member.deletedAt)
+      ),
+    });
+
+    if (!membership) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Get Jira connection for organization
@@ -74,6 +88,18 @@ export async function POST(req: NextRequest) {
             "Organization ID, Jira domain, email, and API token are required",
         },
         { status: 400 }
+      );
+    }
+
+    // Plan gate: Jira integration is Pro+ only
+    const jiraAllowed = await canUseJira(organizationId);
+    if (!jiraAllowed) {
+      return NextResponse.json(
+        {
+          error: "Jira integration requires a Pro plan.",
+          upgradeRequired: true,
+        },
+        { status: 403 }
       );
     }
 

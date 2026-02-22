@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       canAdd: result.allowed,
       currentCount: result.currentCount,
       limit: result.limit,
-      status: result.status,
+      plan: result.plan,
     });
   } catch (error) {
     console.error("Error checking member limit:", error);

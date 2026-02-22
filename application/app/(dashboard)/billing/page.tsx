@@ -249,17 +249,18 @@ export default function BillingPage() {
     (sub) => sub.status === "active" || sub.status === "trialing"
   );
 
-  // Determine current plan
-  const currentPlan =
-    activeSubscription?.status === "trialing"
-      ? "trial"
-      : activeSubscription?.status === "active"
-      ? "pro"
-      : "free";
+  // Determine current plan from the actual plan name, not a hardcoded string.
+  // Falls back to "free" when there is no active/trialing subscription.
+  const currentPlan: string =
+    !activeSubscription || activeSubscription.status === "canceled"
+      ? "free"
+      : activeSubscription.plan ?? "pro";
 
   const isFreePlan = currentPlan === "free";
-  const isTrialPlan = currentPlan === "trial";
-  const isProPlan = currentPlan === "pro";
+  const isTrialPlan = activeSubscription?.status === "trialing";
+  // Show Pro card as "current" for both pro and enterprise subscribers
+  const isProPlan =
+    (currentPlan === "pro" || currentPlan === "enterprise") && !isTrialPlan;
 
   const memberCount = fullOrg?.members?.length || 1;
   const monthlyAmount = memberCount * PRICE_PER_USER;
@@ -366,24 +367,25 @@ export default function BillingPage() {
               <div className="pt-4 border-t space-y-3">
                 <p className="text-sm font-medium">Current Usage:</p>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Members</span>
-                    <span className="font-medium">
-                      {usage.members.current}/{usage.members.limit}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Teams</span>
-                    <span className="font-medium">
-                      {usage.teams.current}/{usage.teams.limit}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Standups</span>
-                    <span className="font-medium">
-                      {usage.standups.current}/{usage.standups.limit}
-                    </span>
-                  </div>
+                  {[
+                    { label: "Members", ...usage.members },
+                    { label: "Teams", ...usage.teams },
+                    { label: "Standups", ...usage.standups },
+                  ].map((item) => (
+                    <div key={item.label} className="flex justify-between">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span
+                        className={`font-medium ${
+                          item.limit !== null && item.percentage >= 100
+                            ? "text-destructive"
+                            : ""
+                        }`}
+                      >
+                        {item.current}
+                        {item.limit !== null ? `/${item.limit}` : " / ∞"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
