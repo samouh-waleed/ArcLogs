@@ -6,8 +6,10 @@ import {
   teamMember,
   slackWorkspace,
   subscription,
+  standupResponse,
 } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { ConfigWithFullData } from "@/lib/db-types";
 
 function verifyCronSecret(req: NextRequest): boolean {
@@ -53,13 +55,20 @@ function getCurrentTimeInfo(timezone: string) {
   };
 }
 
-function buildStandupBlocks(questions: any[], standupConfigId: string) {
+function buildStandupBlocks(
+  questions: any[],
+  standupConfigId: string,
+  teamName: string,
+  configName: string
+) {
   const blocks: any[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "👋 *Time for your daily standup!*\n\nPlease answer the following questions:",
+        text: `👋 *[${teamName}] Time for your standup!*${
+          configName !== teamName ? `\n_${configName}_` : ""
+        }\n\nPlease answer the following questions:`,
       },
     },
     {
@@ -87,7 +96,8 @@ function buildStandupBlocks(questions: any[], standupConfigId: string) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Reply to this message with your answers. Number each response to match the questions above.\n\n_Example:_\n1. Fixed bug #123\n2. Will deploy to production\n3. No blockers",
+        // Instruct thread reply so multi-team users answer the right standup
+        text: "👆 *How to reply:* Hover over *this message* → click *Reply in thread* → type your numbered answers.\n\n_Example:_\n1. Fixed bug #123\n2. Will deploy to production\n3. No blockers\n\n⚠️ _Do NOT type in the main chat — use the thread on this message so your response reaches the right team._",
       },
     },
     {
@@ -95,7 +105,7 @@ function buildStandupBlocks(questions: any[], standupConfigId: string) {
       elements: [
         {
           type: "mrkdwn",
-          text: `Standup ID: \`${standupConfigId}\``,
+          text: `📋 ${teamName} | Standup ID: \`${standupConfigId}\``,
         },
       ],
     }
@@ -215,8 +225,14 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        const blocks = buildStandupBlocks(config.questions, config.id);
-        const fallbackText = `Time for your daily standup! Please answer ${config.questions.length} questions.`;
+        const blocks = buildStandupBlocks(
+          config.questions,
+          config.id,
+          config.team.name,
+          config.name
+        );
+        const fallbackText = `[${config.team.name}] Time for your standup! Please answer ${config.questions.length} questions.`;
+        const today = new Date().toISOString().split("T")[0];
 
         for (const member of config.team.teamMembers) {
           if (!member.slackUserId) {
@@ -234,6 +250,41 @@ export async function GET(req: NextRequest) {
           if (result.success) {
             sentCount++;
             console.log(`✉️ Sent standup to ${member.user.email}`);
+
+            // Pre-create a standup_response in 'awaiting_response' state,
+            // storing the bot's message ts so thread replies can be matched
+            // back to this exact standup config (fixes multi-team ambiguity).
+            try {
+              const existing = await db.query.standupResponse.findFirst({
+                where: and(
+                  eq(standupResponse.standupConfigId, config.id),
+                  eq(standupResponse.userId, member.userId),
+                  eq(standupResponse.responseDate, today),
+                  isNull(standupResponse.deletedAt)
+                ),
+              });
+
+              if (!existing) {
+                await db.insert(standupResponse).values({
+                  id: nanoid(),
+                  standupConfigId: config.id,
+                  teamId: member.teamId,
+                  userId: member.userId,
+                  slackUserId: member.slackUserId,
+                  slackMessageTs: result.messageTs,
+                  responseDate: today,
+                  responses: {},
+                  responseType: "text",
+                  processingStatus: "awaiting_response",
+                });
+              }
+            } catch (preCreateError) {
+              // Non-fatal: user can still reply, fallback routing will handle it
+              console.error(
+                `⚠️ Could not pre-create standup record for ${member.user.email}:`,
+                preCreateError
+              );
+            }
           } else {
             errors.push(
               `Failed to send to ${member.user.email}: ${result.error}`

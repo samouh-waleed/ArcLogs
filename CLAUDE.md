@@ -325,6 +325,12 @@ Note: [~] = implemented but not fully end-to-end tested in production-like scena
 - [ ] Unit/integration tests
 - [ ] Team analytics & reporting (sentiment trends, velocity, weekly summaries)
 
+## Slack Workspace Switching (fixed)
+- **Root bug**: OAuth route searched for existing workspace by `slackTeamId` (Slack's ID), not `organizationId`. Switching workspaces created a second active record; `findFirst` returned the stale one.
+- **Fix**: OAuth now finds the org's current active workspace by `organizationId` first. If the new workspace has a different `slackTeamId` (i.e. switching), it: (1) soft-deletes the old workspace record, (2) clears `slackUserId` for all team members in the org (their IDs came from the old workspace), (3) creates/restores the new workspace record.
+- **Dashboard**: `slack_switched` redirect shows "workspace switched, re-add members" banner.
+- **Standups page**: replaced `alert()` with inline `Alert` components; adds a persistent amber warning banner when any team member has no `slackUserId`, with a direct link to the members picker.
+
 ## Multi-User / Session Isolation (fixed bugs)
 - `GET /api/slack/workspace` — added membership check (was missing, any user could see any org's Slack bot)
 - `GET /api/slack/channels` — added membership check (same issue)

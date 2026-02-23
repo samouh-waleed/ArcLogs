@@ -29,6 +29,8 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
+  UserMinus,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -52,6 +54,7 @@ export default function TeamDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [removingMember, setRemovingMember] = useState<string | null>(null);
   const [triggerMessage, setTriggerMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -130,6 +133,26 @@ export default function TeamDetailPage() {
       setTimeout(() => setTriggerMessage(null), 5000);
     } finally {
       setTriggering(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    setRemovingMember(memberId);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/members/${memberId}`,
+        { method: "DELETE" }
+      );
+      if (response.ok) {
+        setTeam((prev: any) => ({
+          ...prev,
+          teamMembers: prev.teamMembers.filter((m: any) => m.id !== memberId),
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to remove member:", error);
+    } finally {
+      setRemovingMember(null);
     }
   };
 
@@ -364,9 +387,62 @@ export default function TeamDetailPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getRoleIcon(member.role)}
-                    <span className="text-sm capitalize">{member.role}</span>
+                  <div className="flex items-center gap-3">
+                    {/* Slack link status */}
+                    {member.slackUserId ? (
+                      <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                        <CheckCircle className="h-3 w-3" />
+                        Slack linked
+                      </span>
+                    ) : (
+                      <Link href={`/teams/${team.id}/members`}>
+                        <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full cursor-pointer hover:bg-amber-200 transition-colors">
+                          <AlertTriangle className="h-3 w-3" />
+                          Not linked — fix
+                        </span>
+                      </Link>
+                    )}
+                    {/* Role */}
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      {getRoleIcon(member.role)}
+                      <span className="capitalize">{member.role}</span>
+                    </div>
+                    {/* Remove */}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          disabled={removingMember === member.id}
+                        >
+                          {removingMember === member.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <UserMinus className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remove Member?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Remove <strong>{member.user?.name}</strong> from{" "}
+                            {team.name}? They will no longer receive standup
+                            questions from this team.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleRemoveMember(member.id)}
+                            className="bg-destructive text-destructive-foreground"
+                          >
+                            Remove
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               ))}
