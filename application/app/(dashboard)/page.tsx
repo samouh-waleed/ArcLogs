@@ -57,6 +57,12 @@ export default function DashboardPage() {
     if (success === "slack_connected") {
       setMessage({ type: "success", text: "Slack connected successfully!" });
       router.replace("/");
+    } else if (success === "slack_switched") {
+      setMessage({
+        type: "success",
+        text: "Slack workspace switched! Team members have been unlinked — go to each team and re-add members from the new workspace.",
+      });
+      router.replace("/");
     } else if (error) {
       setMessage({
         type: "error",
@@ -184,7 +190,7 @@ export default function DashboardPage() {
     );
     slackAuthUrl.searchParams.set(
       "scope",
-      "channels:read,chat:write,im:write,users:read,users:read.email"
+      "channels:read,chat:write,im:write,im:history,users:read,users:read.email,files:read,app_mentions:read"
     );
     slackAuthUrl.searchParams.set(
       "redirect_uri",

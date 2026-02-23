@@ -400,7 +400,7 @@ export default function SettingsPage() {
     );
     slackAuthUrl.searchParams.set(
       "scope",
-      "channels:read,chat:write,im:write,users:read,users:read.email"
+      "channels:read,chat:write,im:write,im:history,users:read,users:read.email,files:read,app_mentions:read"
     );
     slackAuthUrl.searchParams.set(
       "redirect_uri",

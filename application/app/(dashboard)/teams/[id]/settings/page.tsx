@@ -368,7 +368,7 @@ export default function TeamSettingsPage() {
                   </CardDescription>
                 </div>
                 <Button asChild>
-                  <Link href={`/teams/${teamId}/members/add`}>
+                  <Link href={`/teams/${teamId}/members`}>
                     Add Member
                   </Link>
                 </Button>
@@ -385,7 +385,7 @@ export default function TeamSettingsPage() {
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-20" />
                   <p>No members yet</p>
                   <Button asChild variant="link" className="mt-2">
-                    <Link href={`/teams/${teamId}/members/add`}>
+                    <Link href={`/teams/${teamId}/members`}>
                       Add your first member
                     </Link>
                   </Button>

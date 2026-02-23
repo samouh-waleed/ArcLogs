@@ -230,49 +230,144 @@ async function handleStandupResponse(event: any, workspace: any) {
     }
 
     const messageText = event.text;
+    const threadTs = event.thread_ts as string | undefined;
 
     console.log("💬 Processing standup response:", {
       slackUserId,
+      threadTs,
       messageText: messageText?.substring(0, 50) + "...",
     });
 
-    const member = (await db.query.teamMember.findFirst({
-      where: and(
-        eq(teamMember.slackUserId, slackUserId),
-        isNull(teamMember.deletedAt)
-      ),
-      with: {
-        team: {
-          with: {
-            standupConfigs: {
-              where: and(
-                eq(standupConfig.isActive, true),
-                isNull(standupConfig.deletedAt)
-              ),
+    // ── Thread-based routing ──────────────────────────────────────────────
+    // When the user replies in a thread, thread_ts equals the bot's original
+    // message ts. We pre-created a standup_response with that ts, so we can
+    // find the exact config even when the user is in multiple teams.
+    let pendingRecord: any = null;
+    if (threadTs) {
+      pendingRecord = await db.query.standupResponse.findFirst({
+        where: and(
+          eq(standupResponse.slackUserId, slackUserId),
+          eq(standupResponse.slackMessageTs, threadTs),
+          isNull(standupResponse.deletedAt)
+        ),
+        with: {
+          standupConfig: {
+            with: {
+              team: true,
             },
           },
         },
-        user: true,
-      },
-    })) as TeamMemberWithRelations | undefined;
-
-    if (!member) {
-      console.log("⚠️ No team member found for Slack user:", slackUserId);
-      return;
+      });
     }
 
-    if (!member.team.standupConfigs.length) {
-      console.log("⚠️ No active standup config for team:", member.teamId);
-      return;
+    let config: any;
+    let member: TeamMemberWithRelations | undefined;
+
+    if (pendingRecord?.standupConfig) {
+      // Thread reply matched a specific standup — use it directly.
+      config = pendingRecord.standupConfig;
+      member = (await db.query.teamMember.findFirst({
+        where: and(
+          eq(teamMember.slackUserId, slackUserId),
+          eq(teamMember.teamId, config.teamId),
+          isNull(teamMember.deletedAt)
+        ),
+        with: { team: { with: { standupConfigs: true } }, user: true },
+      })) as TeamMemberWithRelations | undefined;
+      console.log("🧵 Thread reply matched standup for team:", config.team?.name);
+    } else {
+      // ── Fallback: direct DM reply ─────────────────────────────────────
+      // Find the oldest unanswered standup for this user today.
+      // Uses findMany across all team memberships to avoid always picking
+      // the same team when the user is in multiple teams.
+      const today = new Date().toISOString().split("T")[0];
+
+      const allMembers = await db.query.teamMember.findMany({
+        where: and(
+          eq(teamMember.slackUserId, slackUserId),
+          isNull(teamMember.deletedAt)
+        ),
+        with: {
+          team: {
+            with: {
+              standupConfigs: {
+                where: and(
+                  eq(standupConfig.isActive, true),
+                  isNull(standupConfig.deletedAt)
+                ),
+              },
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!allMembers.length) {
+        console.log("⚠️ No team member found for Slack user:", slackUserId);
+        return;
+      }
+
+      // Find the first team with an unanswered standup today
+      let chosenMember: TeamMemberWithRelations | undefined;
+      for (const m of allMembers as TeamMemberWithRelations[]) {
+        if (!m.team.standupConfigs.length) continue;
+        const cfg = m.team.standupConfigs[0];
+        const existing = await db.query.standupResponse.findFirst({
+          where: and(
+            eq(standupResponse.standupConfigId, cfg.id),
+            eq(standupResponse.userId, m.userId),
+            eq(standupResponse.responseDate, today),
+            isNull(standupResponse.deletedAt)
+          ),
+        });
+        // Pick the first team with no completed response yet
+        if (!existing || existing.processingStatus === "awaiting_response") {
+          chosenMember = m;
+          break;
+        }
+      }
+
+      if (!chosenMember) {
+        // All standups answered — take first membership as fallback
+        chosenMember = allMembers[0] as TeamMemberWithRelations;
+      }
+
+      member = chosenMember;
+
+      if (!member.team.standupConfigs.length) {
+        console.log("⚠️ No active standup config for team:", member.teamId);
+        return;
+      }
+
+      config = member.team.standupConfigs[0];
+
+      // If user is in multiple teams with pending standups, let them know
+      // they should reply in the thread next time.
+      const teamsWithPending = (allMembers as TeamMemberWithRelations[]).filter(
+        (m) => m.team.standupConfigs.length > 0 && m.teamId !== member!.teamId
+      );
+      if (teamsWithPending.length > 0) {
+        const otherTeams = teamsWithPending
+          .map((m) => `*${m.team.name}*`)
+          .join(", ");
+        await sendSlackDM(
+          workspace.botToken,
+          slackUserId,
+          `ℹ️ Your response has been recorded for *${member.team.name}*.\n\nYou also have pending standups for: ${otherTeams}.\n_Tip: Reply directly in each standup's thread to answer the right team's questions._`
+        );
+      }
     }
 
-    console.log("✅ Found member and config:", {
-      memberEmail: member.user.email,
-      teamName: member.team.name,
-      configId: member.team.standupConfigs[0].id,
+    console.log("✅ Resolved member and config:", {
+      memberEmail: member?.user?.email,
+      teamName: member?.team?.name,
+      configId: config?.id,
     });
 
-    const config = member.team.standupConfigs[0];
+    if (!member) {
+      console.log("⚠️ Could not resolve team member for Slack user:", slackUserId);
+      return;
+    }
 
     const responses = parseStandupResponse(messageText, config.questions);
 
@@ -284,8 +379,8 @@ async function handleStandupResponse(event: any, workspace: any) {
       await sendSlackDM(
         workspace.botToken,
         slackUserId,
-        `⚠️ Please answer all required questions:\n\n${missingRequired
-          .map((q, i) => `${i + 1}. ${q}`)
+        `⚠️ Please answer all required questions for *${member.team.name}*:\n\n${missingRequired
+          .map((q: string, i: number) => `${i + 1}. ${q}`)
           .join("\n")}`
       );
       return;
@@ -293,16 +388,19 @@ async function handleStandupResponse(event: any, workspace: any) {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Check if user already submitted a response today
-    const existingResponse = await db.query.standupResponse.findFirst({
-      where: and(
-        eq(standupResponse.userId, member.userId),
-        eq(standupResponse.teamId, member.teamId),
-        eq(standupResponse.standupConfigId, config.id),
-        eq(standupResponse.responseDate, today),
-        isNull(standupResponse.deletedAt)
-      ),
-    });
+    // Use the pre-created record if available (thread reply path), otherwise query
+    const existingResponse =
+      pendingRecord?.standupConfig?.id === config.id
+        ? pendingRecord
+        : await db.query.standupResponse.findFirst({
+            where: and(
+              eq(standupResponse.userId, member.userId),
+              eq(standupResponse.teamId, member.teamId),
+              eq(standupResponse.standupConfigId, config.id),
+              eq(standupResponse.responseDate, today),
+              isNull(standupResponse.deletedAt)
+            ),
+          });
 
     let savedResponse;
     let isUpdate = false;
@@ -331,7 +429,7 @@ async function handleStandupResponse(event: any, workspace: any) {
       await sendSlackDM(
         workspace.botToken,
         slackUserId,
-        "✏️ Your standup update has been updated and will be reprocessed."
+        `✏️ Your *${member.team.name}* standup has been updated and will be reprocessed.`
       );
     } else {
       // Create new response
@@ -361,7 +459,7 @@ async function handleStandupResponse(event: any, workspace: any) {
       await sendSlackDM(
         workspace.botToken,
         slackUserId,
-        "✅ Thanks! Your standup update has been saved and will be processed."
+        `✅ Thanks! Your *${member.team.name}* standup has been saved and will be processed.`
       );
     }
 

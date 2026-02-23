@@ -24,8 +24,12 @@ import {
   Pause,
   Loader2,
   Send,
+  AlertTriangle,
+  CheckCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { authClient } from "@/lib/auth-client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,8 +51,16 @@ export default function StandupsPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    type: "success" | "warning" | "error";
+    message: string;
+    details?: string[];
+  } | null>(null);
+  const [membersWithoutSlack, setMembersWithoutSlack] = useState(0);
+  const [totalMembers, setTotalMembers] = useState(0);
   const params = useParams();
   const teamId = params.id as string;
+  const { data: activeOrg } = authClient.useActiveOrganization();
 
   useEffect(() => {
     async function loadData() {
@@ -67,6 +79,17 @@ export default function StandupsPage() {
           const standupsData = await standupsRes.json();
           setStandups(standupsData.standups);
         }
+
+        // Check how many team members are missing Slack user IDs
+        const membersRes = await fetch(`/api/teams/${teamId}/members`);
+        if (membersRes.ok) {
+          const membersData = await membersRes.json();
+          const members = membersData.members || [];
+          setTotalMembers(members.length);
+          setMembersWithoutSlack(
+            members.filter((m: any) => !m.slackUserId).length
+          );
+        }
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -75,25 +98,45 @@ export default function StandupsPage() {
     }
 
     loadData();
-  }, [params.id]);
+  }, [params.id, teamId]);
 
   const handleTest = async (standupId: string) => {
     setTesting(standupId);
+    setTestResult(null);
     try {
       const response = await fetch(`/api/teams/${params.id}/trigger-standup`, {
         method: "POST",
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
-        alert(`✅ Sent test standup to ${data.sent} team member(s)`);
+        if (data.sent === 0) {
+          setTestResult({
+            type: "warning",
+            message: `Sent to 0 members — team members need to be linked to Slack.`,
+            details: data.errors,
+          });
+          // Refresh the member count so the banner updates
+          setMembersWithoutSlack(totalMembers);
+        } else {
+          setTestResult({
+            type: "success",
+            message: `Sent test standup to ${data.sent} member${data.sent !== 1 ? "s" : ""}.${
+              data.errors?.length ? ` (${data.errors.length} skipped — see below)` : ""
+            }`,
+            details: data.errors,
+          });
+        }
       } else {
-        const errorData = await response.json();
-        alert(`❌ Failed to send test standup: ${errorData.error || 'Unknown error'}`);
+        setTestResult({
+          type: "error",
+          message: data.error || "Failed to send test standup.",
+        });
       }
     } catch (error) {
       console.error("Failed to test standup:", error);
-      alert("❌ Failed to send test standup");
+      setTestResult({ type: "error", message: "Failed to send test standup." });
     } finally {
       setTesting(null);
     }
@@ -165,6 +208,70 @@ export default function StandupsPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Warning: members missing Slack user IDs */}
+      {totalMembers > 0 && membersWithoutSlack > 0 && (
+        <Alert className="border-amber-300 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            <span className="font-medium">
+              {membersWithoutSlack === totalMembers
+                ? "No team members are linked to Slack"
+                : `${membersWithoutSlack} of ${totalMembers} members are not linked to Slack`}
+            </span>
+            {" — standups won't reach them. "}
+            <Link
+              href={`/teams/${teamId}/members`}
+              className="underline font-medium"
+            >
+              Re-add members from the Slack workspace picker →
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Test standup result */}
+      {testResult && (
+        <Alert
+          className={
+            testResult.type === "success"
+              ? "border-green-300 bg-green-50"
+              : testResult.type === "warning"
+              ? "border-amber-300 bg-amber-50"
+              : "border-destructive bg-destructive/5"
+          }
+        >
+          {testResult.type === "success" ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <AlertTriangle
+              className={`h-4 w-4 ${
+                testResult.type === "warning"
+                  ? "text-amber-600"
+                  : "text-destructive"
+              }`}
+            />
+          )}
+          <AlertDescription
+            className={
+              testResult.type === "success"
+                ? "text-green-800"
+                : testResult.type === "warning"
+                ? "text-amber-800"
+                : "text-destructive"
+            }
+          >
+            <p className="font-medium">{testResult.message}</p>
+            {testResult.details && testResult.details.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-xs list-disc list-inside">
+                {testResult.details.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {standups.length === 0 ? (
         <Card>
