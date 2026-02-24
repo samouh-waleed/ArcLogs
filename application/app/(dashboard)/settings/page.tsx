@@ -455,107 +455,77 @@ export default function SettingsPage() {
       {canManageMembers && usage && (
         <Card>
           <CardHeader>
-            <CardTitle>Usage & Limits</CardTitle>
-            <CardDescription>
-              Current usage across your organization
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Usage & Limits</CardTitle>
+                <CardDescription>
+                  Current usage across your organization
+                </CardDescription>
+              </div>
+              <Badge
+                variant={usage.plan === "free" ? "secondary" : "default"}
+                className="capitalize"
+              >
+                {usage.plan} plan
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
-              {/* Members */}
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium">Members</p>
-                  {usage.members.percentage >= 100 && (
-                    <Badge variant="destructive" className="text-xs">
-                      Limit
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-2xl font-bold">{usage.members.current}</p>
-                <p className="text-sm text-muted-foreground">
-                  of {usage.members.limit}{" "}
-                  {usage.status === "free" ? "allowed" : "used"}
-                </p>
-                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      usage.members.percentage >= 100
-                        ? "bg-red-500"
-                        : "bg-primary"
-                    }`}
-                    style={{
-                      width: `${Math.min(usage.members.percentage, 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Teams */}
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium">Teams</p>
-                  {usage.teams.percentage >= 100 && (
-                    <Badge variant="destructive" className="text-xs">
-                      Limit
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-2xl font-bold">{usage.teams.current}</p>
-                <p className="text-sm text-muted-foreground">
-                  of {usage.teams.limit}{" "}
-                  {usage.status === "free" ? "allowed" : "used"}
-                </p>
-                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      usage.teams.percentage >= 100
-                        ? "bg-red-500"
-                        : "bg-primary"
-                    }`}
-                    style={{
-                      width: `${Math.min(usage.teams.percentage, 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Standups */}
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium">Standups</p>
-                  {usage.standups.percentage >= 100 && (
-                    <Badge variant="destructive" className="text-xs">
-                      Limit
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-2xl font-bold">{usage.standups.current}</p>
-                <p className="text-sm text-muted-foreground">
-                  of {usage.standups.limit}{" "}
-                  {usage.status === "free" ? "allowed" : "used"}
-                </p>
-                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      usage.standups.percentage >= 100
-                        ? "bg-red-500"
-                        : "bg-primary"
-                    }`}
-                    style={{
-                      width: `${Math.min(usage.standups.percentage, 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
+              {[
+                { label: "Members", stat: usage.members },
+                { label: "Teams", stat: usage.teams },
+                { label: "Standups", stat: usage.standups },
+              ].map(({ label, stat }) => {
+                const isUnlimited = stat.limit === null;
+                const atLimit = !isUnlimited && stat.percentage >= 100;
+                return (
+                  <div key={label} className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium">{label}</p>
+                      {atLimit && (
+                        <Badge variant="destructive" className="text-xs">
+                          Limit reached
+                        </Badge>
+                      )}
+                      {isUnlimited && (
+                        <Badge variant="secondary" className="text-xs">
+                          Unlimited
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-2xl font-bold">{stat.current}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {isUnlimited
+                        ? "no limit"
+                        : `of ${stat.limit} allowed`}
+                    </p>
+                    {!isUnlimited && (
+                      <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            atLimit ? "bg-red-500" : "bg-primary"
+                          }`}
+                          style={{
+                            width: `${Math.min(stat.percentage, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {usage.status === "free" && (
+            {usage.plan === "free" && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  You're on the free plan. Upgrade to unlock unlimited teams,
-                  members, and standups.
+                  You&apos;re on the Free plan.{" "}
+                  <a href="/billing" className="underline font-medium">
+                    Upgrade to Pro
+                  </a>{" "}
+                  to unlock unlimited teams, members, and standups.
                 </AlertDescription>
               </Alert>
             )}

@@ -27,6 +27,30 @@ import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 
+// ── Module-level cache ────────────────────────────────────────────────────────
+// Persists across client-side navigations (Next.js soft route changes).
+// Cleared only on hard refresh. Keyed by org ID so org-switching works.
+interface DashboardSnapshot {
+  slackWorkspace: any;
+  jiraConnected: boolean;
+  teamsCount: number;
+  membersCount: number;
+  standupsCount: number;
+  usage: any;
+}
+const _dashCache: Record<string, { data: DashboardSnapshot; ts: number }> = {};
+const DASH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function getDashCache(orgId: string): DashboardSnapshot | null {
+  const entry = _dashCache[orgId];
+  if (entry && Date.now() - entry.ts < DASH_CACHE_TTL) return entry.data;
+  return null;
+}
+function setDashCache(orgId: string, data: DashboardSnapshot) {
+  _dashCache[orgId] = { data, ts: Date.now() };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,109 +99,113 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [searchParams, router]);
 
-  // Load Slack workspace
-  useEffect(() => {
-    async function loadSlackWorkspace() {
-      if (!activeOrg?.id) return;
-
-      try {
-        const response = await fetch(
-          `/api/slack/workspace?orgId=${activeOrg.id}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setSlackWorkspace(data.workspace);
-        }
-      } catch (error) {
-        console.error("Failed to load Slack workspace:", error);
-      } finally {
-        setLoadingSlack(false);
-      }
-    }
-
-    loadSlackWorkspace();
-  }, [activeOrg?.id]);
-
-  // Load Jira connection status
-  useEffect(() => {
-    async function loadJiraConnection() {
-      if (!activeOrg?.id) return;
-
-      try {
-        const response = await fetch(`/api/jira/connection?orgId=${activeOrg.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setJiraConnected(!!data.connection);
-        }
-      } catch (error) {
-        console.error("Failed to load Jira connection:", error);
-      } finally {
-        setLoadingJira(false);
-      }
-    }
-
-    loadJiraConnection();
-  }, [activeOrg?.id]);
-
-  // Load plan + usage limits
+  // Single effect that loads all dashboard data with cache support.
+  // On revisit: cache hit → state populated instantly (no skeleton wait).
+  // Always re-fetches in background and updates cache for next visit.
   useEffect(() => {
     if (!activeOrg?.id) return;
-    fetch(`/api/organization-usage?orgId=${activeOrg.id}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data) setUsage(data); })
-      .catch(() => {});
-  }, [activeOrg?.id]);
+    const orgId = activeOrg.id;
 
-  // Load dashboard statistics
-  useEffect(() => {
-    async function loadStats() {
-      if (!activeOrg?.id) return;
-
-      try {
-        // Load teams count
-        const teamsResponse = await fetch(`/api/teams?orgId=${activeOrg.id}`);
-        if (teamsResponse.ok) {
-          const teamsData = await teamsResponse.json();
-          setTeamsCount(teamsData.teams?.length || 0);
-
-          // If there are teams, count members and standups
-          if (teamsData.teams?.length > 0) {
-            let totalMembers = 0;
-            let totalStandups = 0;
-
-            for (const team of teamsData.teams) {
-              // Count members
-              const membersResponse = await fetch(
-                `/api/teams/${team.id}/members`
-              );
-              if (membersResponse.ok) {
-                const membersData = await membersResponse.json();
-                totalMembers += membersData.members?.length || 0;
-              }
-
-              // Count standups
-              const standupsResponse = await fetch(
-                `/api/standups?teamId=${team.id}`
-              );
-              if (standupsResponse.ok) {
-                const standupsData = await standupsResponse.json();
-                totalStandups += standupsData.standups?.length || 0;
-              }
-            }
-
-            setMembersCount(totalMembers);
-            setStandupsCount(totalStandups);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load statistics:", error);
-      } finally {
-        setLoadingStats(false);
-      }
+    // Populate from cache immediately — skips the loading skeleton on revisit
+    const cached = getDashCache(orgId);
+    if (cached) {
+      setSlackWorkspace(cached.slackWorkspace);
+      setJiraConnected(cached.jiraConnected);
+      setTeamsCount(cached.teamsCount);
+      setMembersCount(cached.membersCount);
+      setStandupsCount(cached.standupsCount);
+      setUsage(cached.usage);
+      setLoadingSlack(false);
+      setLoadingJira(false);
+      setLoadingStats(false);
     }
 
-    loadStats();
+    // Always fetch fresh data (in background if cache was used)
+    async function fetchAll() {
+      const [slackRes, jiraRes, teamsRes, usageRes] = await Promise.allSettled([
+        fetch(`/api/slack/workspace?orgId=${orgId}`),
+        fetch(`/api/jira/connection?orgId=${orgId}`),
+        fetch(`/api/teams?orgId=${orgId}`),
+        fetch(`/api/organization-usage?orgId=${orgId}`),
+      ]);
+
+      let newSlack = cached?.slackWorkspace ?? null;
+      let newJira = cached?.jiraConnected ?? false;
+      let newTeams = cached?.teamsCount ?? 0;
+      let newMembers = cached?.membersCount ?? 0;
+      let newStandups = cached?.standupsCount ?? 0;
+      let newUsage = cached?.usage ?? null;
+
+      if (slackRes.status === "fulfilled" && slackRes.value.ok) {
+        const d = await slackRes.value.json();
+        newSlack = d.workspace ?? null;
+        setSlackWorkspace(newSlack);
+      }
+      setLoadingSlack(false);
+
+      if (jiraRes.status === "fulfilled" && jiraRes.value.ok) {
+        const d = await jiraRes.value.json();
+        newJira = !!d.connection;
+        setJiraConnected(newJira);
+      }
+      setLoadingJira(false);
+
+      if (usageRes.status === "fulfilled" && usageRes.value.ok) {
+        newUsage = await usageRes.value.json();
+        setUsage(newUsage);
+      }
+
+      if (teamsRes.status === "fulfilled" && teamsRes.value.ok) {
+        const teamsData = await teamsRes.value.json();
+        const teams = teamsData.teams || [];
+        newTeams = teams.length;
+        setTeamsCount(newTeams);
+
+        // Fetch members + standups for all teams in parallel
+        if (teams.length > 0) {
+          const memberAndStandupResults = await Promise.allSettled(
+            teams.flatMap((team: any) => [
+              fetch(`/api/teams/${team.id}/members`),
+              fetch(`/api/standups?teamId=${team.id}`),
+            ])
+          );
+
+          let totalMembers = 0;
+          let totalStandups = 0;
+          for (let i = 0; i < memberAndStandupResults.length; i += 2) {
+            const mRes = memberAndStandupResults[i];
+            const sRes = memberAndStandupResults[i + 1];
+            if (mRes.status === "fulfilled" && mRes.value.ok) {
+              const d = await mRes.value.json();
+              totalMembers += d.members?.length || 0;
+            }
+            if (sRes.status === "fulfilled" && sRes.value.ok) {
+              const d = await sRes.value.json();
+              totalStandups += d.standups?.length || 0;
+            }
+          }
+          newMembers = totalMembers;
+          newStandups = totalStandups;
+          setMembersCount(newMembers);
+          setStandupsCount(newStandups);
+        }
+      }
+      setLoadingStats(false);
+
+      // Update cache with fresh data
+      setDashCache(orgId, {
+        slackWorkspace: newSlack,
+        jiraConnected: newJira,
+        teamsCount: newTeams,
+        membersCount: newMembers,
+        standupsCount: newStandups,
+        usage: newUsage,
+      });
+    }
+
+    fetchAll().catch(console.error);
   }, [activeOrg?.id]);
+
 
   const handleConnectSlack = () => {
     if (!activeOrg?.id) return;

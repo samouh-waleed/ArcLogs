@@ -56,24 +56,37 @@ export function OnboardingChecklist({
   organizationId,
 }: OnboardingChecklistProps) {
   const router = useRouter();
-  const [dismissed, setDismissed] = useState(false);
-  const [hasCompletedBefore, setHasCompletedBefore] = useState(false);
 
-  // Check if user has dismissed the checklist
+  // Initialize synchronously from localStorage/sessionStorage via lazy useState.
+  // This runs before any useEffect, eliminating the race conditions where:
+  //   • confetti fires because hasCompletedBefore hasn't loaded from localStorage yet
+  //   • dismissed state fires a render before localStorage is read
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      localStorage.getItem(`onboarding-dismissed-${organizationId}`) === "true"
+    );
+  });
+
+  const [hasCompletedBefore, setHasCompletedBefore] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      localStorage.getItem(`onboarding-completed-${organizationId}`) === "true"
+    );
+  });
+
+  // True if this checklist was already shown earlier this session.
+  // On revisit the lazy init reads the flag synchronously → hides immediately.
+  const [seenThisSession] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      sessionStorage.getItem(`onboarding-seen-${organizationId}`) === "true"
+    );
+  });
+
+  // Mark as seen for this session on first mount.
   useEffect(() => {
-    const dismissedState = localStorage.getItem(
-      `onboarding-dismissed-${organizationId}`
-    );
-    if (dismissedState === "true") {
-      setDismissed(true);
-    }
-
-    const completed = localStorage.getItem(
-      `onboarding-completed-${organizationId}`
-    );
-    if (completed === "true") {
-      setHasCompletedBefore(true);
-    }
+    sessionStorage.setItem(`onboarding-seen-${organizationId}`, "true");
   }, [organizationId]);
 
   const steps: OnboardingStep[] = [
@@ -165,8 +178,8 @@ export function OnboardingChecklist({
     setDismissed(true);
   };
 
-  // Don't show if dismissed or all complete
-  if (dismissed || allComplete) {
+  // Don't show if dismissed, all complete, or already seen this session
+  if (dismissed || allComplete || seenThisSession) {
     return null;
   }
 

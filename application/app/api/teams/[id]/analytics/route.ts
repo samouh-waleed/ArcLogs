@@ -56,8 +56,9 @@ export async function GET(
     const startDateStr = startDate.toISOString().split("T")[0];
 
     // Get response rate over time
+    // Excludes 'awaiting_response' records (pre-created by cron before user replies)
     const responseRateData = await db.execute(sql`
-      SELECT 
+      SELECT
         response_date::date as date,
         COUNT(DISTINCT user_id) as response_count,
         (SELECT COUNT(*) FROM team_member WHERE team_id = ${teamId} AND deleted_at IS NULL) as total_members
@@ -65,13 +66,15 @@ export async function GET(
       WHERE team_id = ${teamId}
         AND response_date >= ${startDateStr}
         AND deleted_at IS NULL
+        AND processing_status != 'awaiting_response'
       GROUP BY response_date
       ORDER BY response_date ASC
     `);
 
     // Get sentiment distribution over time
+    // Only completed responses with a non-null sentiment value
     const sentimentData = await db.execute(sql`
-      SELECT 
+      SELECT
         response_date::date as date,
         ai_insights->>'sentiment' as sentiment,
         COUNT(*) as count
@@ -81,6 +84,7 @@ export async function GET(
         AND deleted_at IS NULL
         AND processing_status = 'completed'
         AND ai_insights IS NOT NULL
+        AND ai_insights->>'sentiment' IS NOT NULL
       GROUP BY response_date, ai_insights->>'sentiment'
       ORDER BY response_date ASC
     `);
@@ -126,10 +130,11 @@ export async function GET(
                  ELSE 0 END) as avg_sentiment_score
       FROM team_member tm
       JOIN "user" u ON tm.user_id = u.id
-      LEFT JOIN standup_response sr ON sr.user_id = u.id 
+      LEFT JOIN standup_response sr ON sr.user_id = u.id
         AND sr.team_id = ${teamId}
         AND sr.response_date >= ${startDateStr}
         AND sr.deleted_at IS NULL
+        AND sr.processing_status != 'awaiting_response'
       WHERE tm.team_id = ${teamId}
         AND tm.deleted_at IS NULL
       GROUP BY u.id, u.name, u.email
@@ -159,13 +164,40 @@ export async function GET(
       LIMIT 10
     `);
 
-    // Get overall stats
+    // Voice vs text breakdown (excludes awaiting_response)
+    const responseTypeBreakdown = await db.execute(sql`
+      SELECT
+        response_type,
+        COUNT(*) as count
+      FROM standup_response
+      WHERE team_id = ${teamId}
+        AND response_date >= ${startDateStr}
+        AND deleted_at IS NULL
+        AND processing_status != 'awaiting_response'
+      GROUP BY response_type
+    `);
+
+    // Processing status breakdown (excludes awaiting_response) for completion rate
+    const processingStatusBreakdown = await db.execute(sql`
+      SELECT
+        processing_status,
+        COUNT(*) as count
+      FROM standup_response
+      WHERE team_id = ${teamId}
+        AND response_date >= ${startDateStr}
+        AND deleted_at IS NULL
+        AND processing_status != 'awaiting_response'
+      GROUP BY processing_status
+    `);
+
+    // Get overall stats — excludes awaiting_response (pre-created, not yet answered)
     const totalResponses = await db.execute(sql`
       SELECT COUNT(*) as count
       FROM standup_response
       WHERE team_id = ${teamId}
         AND response_date >= ${startDateStr}
         AND deleted_at IS NULL
+        AND processing_status != 'awaiting_response'
     `);
 
     const totalBlockers = await db.execute(sql`
@@ -197,6 +229,19 @@ export async function GET(
         AND deleted_at IS NULL
     `);
 
+    // Derive completion rate from status breakdown
+    const statusMap: Record<string, number> = {};
+    for (const row of processingStatusBreakdown.rows as any[]) {
+      statusMap[row.processing_status] = Number(row.count);
+    }
+    const completedResponses = statusMap["completed"] || 0;
+
+    // Derive voice vs text counts
+    const typeMap: Record<string, number> = {};
+    for (const row of responseTypeBreakdown.rows as any[]) {
+      typeMap[row.response_type] = Number(row.count);
+    }
+
     return NextResponse.json({
       responseRate: responseRateData.rows,
       sentiment: sentimentData.rows,
@@ -206,12 +251,16 @@ export async function GET(
       topBlockers: topBlockers.rows,
       stats: {
         totalResponses: Number(totalResponses.rows[0]?.count) || 0,
+        completedResponses,
+        voiceResponses: typeMap["voice"] || 0,
+        textResponses: typeMap["text"] || 0,
         totalBlockers: Number(totalBlockers.rows[0]?.count) || 0,
         totalHelpRequests: Number(totalHelpRequests.rows[0]?.total) || 0,
         resolvedHelpRequests: Number(totalHelpRequests.rows[0]?.resolved) || 0,
-        avgProcessingTime: Math.round(
-          Number(avgResponseTime.rows[0]?.avg_seconds) || 0
-        ),
+        avgProcessingTime:
+          avgResponseTime.rows[0]?.avg_seconds != null
+            ? Math.round(Number(avgResponseTime.rows[0].avg_seconds))
+            : null,
       },
     });
   } catch (error) {

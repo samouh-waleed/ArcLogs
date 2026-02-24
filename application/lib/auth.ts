@@ -91,15 +91,17 @@ export const auth = betterAuth({
 
         if (currentCount === 0) return false; // always allow first org
 
-        const enterpriseSub = await db.query.subscription.findFirst({
+        // Pro and Enterprise users can have up to 5 orgs.
+        // Free users are limited to 1.
+        const paidSub = await db.query.subscription.findFirst({
           where: and(
             inArray(subscriptionTable.referenceId, orgIds),
             inArray(subscriptionTable.status, ["active", "trialing"]),
-            eq(subscriptionTable.plan, "enterprise")
+            inArray(subscriptionTable.plan, ["pro", "enterprise"])
           ),
         });
 
-        const maxOrgs = enterpriseSub ? 5 : 1;
+        const maxOrgs = paidSub ? 5 : 1;
         return currentCount >= maxOrgs;
       },
       async sendInvitationEmail(data) {

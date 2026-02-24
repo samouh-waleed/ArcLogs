@@ -82,6 +82,7 @@ function SidebarContent({
   myTeams,
   getTeamRole,
   canAccessAdmin,
+  canCreateOrg,
   switching,
   handleSwitchOrg,
   handleSignOut,
@@ -136,19 +137,25 @@ function SidebarContent({
                 )}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2 p-2 text-muted-foreground hover:text-primary"
-              onClick={() => {
-                router.push("/create-organization");
-                onLinkClick?.();
-              }}
-            >
-              <div className="flex h-6 w-6 items-center justify-center rounded border border-dashed border-muted-foreground/30">
-                <Plus className="h-3.5 w-3.5" />
-              </div>
-              Create Organization
-            </DropdownMenuItem>
+            {canCreateOrg && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="gap-2 p-2 text-muted-foreground hover:text-primary"
+                  onClick={() => {
+                    // ?new=1 tells the create-org page to show the form
+                    // without redirecting back (user intentionally wants a new org)
+                    router.push("/create-organization?new=1");
+                    onLinkClick?.();
+                  }}
+                >
+                  <div className="flex h-6 w-6 items-center justify-center rounded border border-dashed border-muted-foreground/30">
+                    <Plus className="h-3.5 w-3.5" />
+                  </div>
+                  Create Organization
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -345,6 +352,25 @@ export default function Sidebar() {
     },
   });
 
+  // Determine if the user can create another organization.
+  // Free plan: max 1 org. Pro/Enterprise: max 5 orgs.
+  const { data: subscriptions } = useQuery({
+    queryKey: ["subscriptions", activeOrg?.id],
+    queryFn: async () => {
+      if (!activeOrg?.id) return [];
+      const { data } = await authClient.subscription.list({
+        query: { referenceId: activeOrg.id },
+      });
+      return data || [];
+    },
+    enabled: !!activeOrg?.id,
+  });
+  const isPaid = subscriptions?.some(
+    (sub: any) => sub.status === "active" || sub.status === "trialing"
+  );
+  const orgCount = organizations?.length || 0;
+  const canCreateOrg = isPaid ? orgCount < 5 : false;
+
   const { data: fullOrg } = useQuery({
     queryKey: ["organization-full", activeOrg?.id],
     queryFn: async () => {
@@ -416,6 +442,7 @@ export default function Sidebar() {
     myTeams,
     getTeamRole,
     canAccessAdmin,
+    canCreateOrg,
     switching,
     handleSwitchOrg,
     handleSignOut,
