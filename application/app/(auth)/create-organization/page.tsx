@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,16 +27,24 @@ function slugify(text: string): string {
 
 export default function CreateOrganizationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // ?new=1 means the user intentionally clicked "Create Organization" in the
+  // sidebar. Without it, we're here because middleware redirected a user with
+  // no active org — in that case we redirect back if they already have orgs.
+  const isIntentionalCreate = searchParams.get("new") === "1";
+
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [checkingOrgs, setCheckingOrgs] = useState(true);
+  const [checkingOrgs, setCheckingOrgs] = useState(!isIntentionalCreate);
 
   const { data: session } = authClient.useSession();
 
-  // Always verify org membership from the server — never trust client-side
-  // cached activeOrg, which can be stale after a user switches accounts.
   useEffect(() => {
+    // If the user deliberately clicked "Create Organization", show the form
+    // immediately — don't redirect them back to an existing org.
+    if (isIntentionalCreate) return;
+
     if (!session?.user) {
       setCheckingOrgs(false);
       return;
@@ -47,7 +55,8 @@ export default function CreateOrganizationPage() {
         const { data: orgs } = await authClient.organization.list();
 
         if (orgs && orgs.length > 0) {
-          // User already has orgs — set the first one active and go to dashboard.
+          // Middleware redirect path: user has orgs but no active one set.
+          // Restore their active org and send to dashboard.
           await authClient.organization.setActive({
             organizationId: orgs[0].id,
           });
@@ -55,7 +64,7 @@ export default function CreateOrganizationPage() {
           return;
         }
 
-        // No orgs — show the create-org form.
+        // No orgs at all — show the create form.
         setCheckingOrgs(false);
       } catch (err) {
         console.error("Error checking organizations:", err);
@@ -64,9 +73,7 @@ export default function CreateOrganizationPage() {
     }
 
     checkExistingOrganizations();
-  // Depend only on the user ID so this re-runs when the signed-in user changes,
-  // but not on every render or when activeOrg cache updates.
-  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, isIntentionalCreate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,8 +98,11 @@ export default function CreateOrganizationPage() {
         organizationId: data.id,
       });
 
-      router.push("/");
-      router.refresh();
+      // Use a full page reload (not router.push) so that:
+      //  1. Better Auth's client-side session/org cache is completely cleared
+      //  2. React Query's org list cache is reset
+      // This ensures the new org appears immediately in the org switcher.
+      window.location.href = "/";
     } catch (err: any) {
       setError(err.message || "Failed to create organization");
     } finally {

@@ -92,7 +92,16 @@ export default function OrganizationAnalyticsPage() {
   }
 
   if (!analytics) {
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <BarChart3 className="h-12 w-12 text-muted-foreground" />
+        <h3 className="text-lg font-semibold">No analytics data yet</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Create teams, add members, and run standups — data will appear here
+          once responses are collected.
+        </p>
+      </div>
+    );
   }
 
   // Process response rate data
@@ -118,11 +127,26 @@ export default function OrganizationAnalyticsPage() {
     0
   );
 
+  // Weighted avg sentiment: each team's contribution is proportional to its
+  // response count. Teams with 0 responses are excluded (their avg_sentiment
+  // is null/0 and would unfairly drag down the org average).
+  const teamsWithResponses = analytics.teams.filter(
+    (t: any) => parseInt(t.total_responses || 0) > 0
+  );
+  const totalResponsesAcrossTeams = teamsWithResponses.reduce(
+    (sum: number, t: any) => sum + parseInt(t.total_responses || 0),
+    0
+  );
   const avgSentiment =
-    analytics.teams.reduce(
-      (sum: number, team: any) => sum + parseFloat(team.avg_sentiment || 0),
-      0
-    ) / (analytics.teams.length || 1);
+    totalResponsesAcrossTeams > 0
+      ? teamsWithResponses.reduce(
+          (sum: number, t: any) =>
+            sum +
+            parseFloat(t.avg_sentiment || 0) *
+              parseInt(t.total_responses || 0),
+          0
+        ) / totalResponsesAcrossTeams
+      : 0;
 
   return (
     <div className="space-y-6">

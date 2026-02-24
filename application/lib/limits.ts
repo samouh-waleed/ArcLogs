@@ -29,9 +29,9 @@ export const PLAN_LIMITS: Record<OrgPlan, PlanConfig> = {
     historyDays: 30,
   },
   pro: {
-    teams: null,
-    members: 50,
-    standups: 3,
+    teams: null,     // unlimited
+    members: null,   // unlimited — charged at $8/member/month via Stripe
+    standups: null,  // unlimited
     voice: true,
     jira: true,
     historyDays: null,
@@ -52,9 +52,18 @@ export const PLAN_LIMITS: Record<OrgPlan, PlanConfig> = {
 
 /**
  * Get the active plan name for an organization.
- * Returns 'free' if no active or trialing subscription exists.
+ *
+ * Priority:
+ *   1. The org's own active/trialing subscription (fastest path).
+ *   2. Plan inheritance — if the org has no subscription, check whether the
+ *      org's owner has a paid subscription on any other org they belong to.
+ *      This covers the common case where a Pro user creates a second org:
+ *      the new org has no subscription yet, but the owner is already paying.
+ *
+ * Returns 'free' if neither condition is met.
  */
 export async function getOrgPlan(organizationId: string): Promise<OrgPlan> {
+  // ── Fast path: own subscription ──────────────────────────────────────────
   const activeSub = await db.query.subscription.findFirst({
     where: and(
       eq(subscription.referenceId, organizationId),
@@ -63,9 +72,54 @@ export async function getOrgPlan(organizationId: string): Promise<OrgPlan> {
     orderBy: (sub, { desc }) => [desc(sub.createdAt)],
   });
 
-  if (!activeSub?.plan) return "free";
-  const plan = activeSub.plan as OrgPlan;
-  return plan === "pro" || plan === "enterprise" ? plan : "free";
+  if (activeSub?.plan) {
+    const plan = activeSub.plan as OrgPlan;
+    return plan === "pro" || plan === "enterprise" ? plan : "free";
+  }
+
+  // ── Inheritance: check the org owner's other orgs ────────────────────────
+  // Find who owns this org (Better Auth sets role = 'owner' on creation).
+  const ownerMembership = await db.query.member.findFirst({
+    where: and(
+      eq(member.organizationId, organizationId),
+      eq(member.role, "owner"),
+      isNull(member.deletedAt)
+    ),
+  });
+
+  if (!ownerMembership) return "free";
+
+  // Find all orgs this owner is a member of (excluding the current one).
+  const ownerAllOrgs = await db.query.member.findMany({
+    where: and(
+      eq(member.userId, ownerMembership.userId),
+      isNull(member.deletedAt)
+    ),
+    columns: { organizationId: true },
+  });
+
+  const otherOrgIds = ownerAllOrgs
+    .map((m) => m.organizationId)
+    .filter((id) => id !== organizationId);
+
+  if (otherOrgIds.length === 0) return "free";
+
+  // If the owner has Pro/Enterprise on any other org, this org inherits it.
+  const inheritedSub = await db.query.subscription.findFirst({
+    where: and(
+      inArray(subscription.referenceId, otherOrgIds),
+      inArray(subscription.status, ["active", "trialing"]),
+      inArray(subscription.plan, ["pro", "enterprise"])
+    ),
+    orderBy: (sub, { desc }) => [desc(sub.createdAt)],
+  });
+
+  if (inheritedSub?.plan) {
+    const plan = inheritedSub.plan as OrgPlan;
+    return plan === "pro" || plan === "enterprise" ? plan : "free";
+  }
+
+  return "free";
 }
 
 // ============================================
