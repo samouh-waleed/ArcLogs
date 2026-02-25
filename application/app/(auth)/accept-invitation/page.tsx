@@ -1,7 +1,7 @@
 // app/(auth)/accept-invitation/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,20 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle, AlertCircle, Users } from "lucide-react";
 
 export default function AcceptInvitationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AcceptInvitationContent />
+    </Suspense>
+  );
+}
+
+function AcceptInvitationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invitationId = searchParams.get("id");

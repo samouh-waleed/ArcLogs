@@ -11,6 +11,8 @@ import {
 import { eq, and, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { nanoid } from "nanoid";
+import { decrypt } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 import { TeamMemberWithRelations } from "@/lib/db-types";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
@@ -155,6 +157,12 @@ export async function POST(req: NextRequest) {
       const slackEvent = event.event;
       const teamId = event.team_id;
 
+      // Rate limit: 60 events per minute per workspace
+      const rl = rateLimit(`slack:${teamId}`, { limit: 60, windowSeconds: 60 });
+      if (!rl.allowed) {
+        return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+      }
+
       console.log("📨 Received event:", {
         type: slackEvent.type,
         channel_type: slackEvent.channel_type,
@@ -175,6 +183,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // Decrypt the bot token once here; all downstream helpers receive it
+      // already decrypted so they never touch the raw encrypted value.
+      const workspaceDecrypted = {
+        ...workspace,
+        botToken: decrypt(workspace.botToken),
+      };
+
       console.log("✅ Workspace found:", workspace.slackTeamName);
 
       const activeSubscription = await db.query.subscription.findFirst({
@@ -187,8 +202,8 @@ export async function POST(req: NextRequest) {
           activeSubscription.status !== "trialing")
       ) {
         await sendSlackDM(
-          workspace.botToken,
-          workspace.installedBy!,
+          workspaceDecrypted.botToken,
+          workspaceDecrypted.installedBy!,
           "⚠️ Your ArcLogs subscription is inactive. Please update payment at " +
             process.env.NEXT_PUBLIC_APP_URL
         );
@@ -198,12 +213,12 @@ export async function POST(req: NextRequest) {
       switch (slackEvent.type) {
         case "message":
           if (slackEvent.channel_type === "im" && !slackEvent.bot_id && (!slackEvent.subtype || slackEvent.subtype === "file_share")) {
-            await handleStandupResponse(slackEvent, workspace);
+            await handleStandupResponse(slackEvent, workspaceDecrypted);
           }
           break;
 
         case "app_mention":
-          await handleMention(slackEvent, workspace);
+          await handleMention(slackEvent, workspaceDecrypted);
           break;
 
         default:

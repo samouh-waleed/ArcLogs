@@ -6,6 +6,7 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
+import { encrypt } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -112,20 +113,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Find any previous record for this specific Slack workspace + org combination.
+    // Look up the Slack workspace by its Slack team ID across ALL orgs.
+    // The previous lookup filtered by organizationId too, which caused a crash
+    // when connecting a workspace that already exists in a different org:
+    //   lookup returns null → INSERT → unique constraint violation on slackTeamId.
+    // By searching globally, we find any existing record and UPDATE it (reassigning
+    // it to the new org) instead of inserting a duplicate.
     const existingForThisSlack = await db.query.slackWorkspace.findFirst({
-      where: and(
-        eq(slackWorkspace.slackTeamId, data.team.id),
-        eq(slackWorkspace.organizationId, state)
-      ),
+      where: eq(slackWorkspace.slackTeamId, data.team.id),
     });
 
     if (existingForThisSlack) {
-      // Reconnecting the same workspace (or restoring a previously disconnected one).
+      // Workspace exists (same org reconnect, or reassignment from another org).
+      // Update the record to point to the current org with fresh credentials.
       await db
         .update(slackWorkspace)
         .set({
-          botToken: data.access_token,
+          organizationId: state,
+          botToken: encrypt(data.access_token),
           botUserId: data.bot_user_id,
           slackTeamName: data.team.name,
           installedBy: data.authed_user.id,
@@ -134,13 +139,13 @@ export async function GET(req: NextRequest) {
         })
         .where(eq(slackWorkspace.id, existingForThisSlack.id));
     } else {
-      // First time connecting this Slack workspace to this org.
+      // Truly new workspace — no record exists for this slackTeamId at all.
       await db.insert(slackWorkspace).values({
         id: nanoid(),
         organizationId: state,
         slackTeamId: data.team.id,
         slackTeamName: data.team.name,
-        botToken: data.access_token,
+        botToken: encrypt(data.access_token),
         botUserId: data.bot_user_id,
         installedBy: data.authed_user.id,
       });

@@ -11,6 +11,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { ConfigWithFullData } from "@/lib/db-types";
+import { decrypt } from "@/lib/crypto";
 
 function buildStandupBlocks(
   questions: any[],
@@ -172,6 +173,7 @@ export async function POST(
     let sentCount = 0;
     const errors: string[] = [];
     const recipients: string[] = [];
+    const botToken = decrypt(workspace.botToken);
 
     // Send standups for each config
     for (const config of configs) {
@@ -194,7 +196,7 @@ export async function POST(
         }
 
         const result = await sendSlackDM(
-          workspace.botToken,
+          botToken,
           member.slackUserId,
           fallbackText,
           blocks

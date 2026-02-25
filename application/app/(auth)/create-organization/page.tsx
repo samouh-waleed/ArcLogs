@@ -1,7 +1,7 @@
 // app/(auth)/create-organization/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,14 @@ function slugify(text: string): string {
 }
 
 export default function CreateOrganizationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+      <CreateOrganizationContent />
+    </Suspense>
+  );
+}
+
+function CreateOrganizationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // ?new=1 means the user intentionally clicked "Create Organization" in the
