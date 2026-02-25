@@ -38,7 +38,7 @@ interface JiraConnection {
   id: string;
   jiraDomain: string;
   jiraEmail: string;
-  jiraApiToken: string;
+  hasToken: boolean;  // token is never returned — only whether one is saved
   defaultProjectKey: string | null;
   defaultIssueType: string;
   isActive: boolean;
@@ -100,7 +100,10 @@ export default function JiraSettingsPage() {
             setConnection(data.connection);
             setJiraDomain(data.connection.jiraDomain);
             setJiraEmail(data.connection.jiraEmail);
-            setJiraApiToken(data.connection.jiraApiToken);
+            // Never pre-populate the token — it's never returned from the API.
+            // Leave jiraApiToken empty; the submit handler sends "__KEEP__" if
+            // the user hasn't entered a new one.
+            setJiraApiToken("");
             setDefaultProjectKey(data.connection.defaultProjectKey || "");
             setDefaultIssueType(data.connection.defaultIssueType || "Task");
           }
@@ -169,10 +172,13 @@ export default function JiraSettingsPage() {
     if (!activeOrg?.id) return;
 
     // Validate required fields
-    if (!jiraDomain || !jiraEmail || !jiraApiToken || !defaultProjectKey) {
+    const tokenRequired = !connection; // only required for new connections
+    if (!jiraDomain || !jiraEmail || (tokenRequired && !jiraApiToken) || !defaultProjectKey) {
       setMessage({
         type: "error",
-        text: "Please fill in all required fields (Domain, Email, API Token, and Project Key)",
+        text: tokenRequired
+          ? "Please fill in all required fields (Domain, Email, API Token, and Project Key)"
+          : "Please fill in all required fields (Domain, Email, and Project Key)",
       });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -188,7 +194,9 @@ export default function JiraSettingsPage() {
           organizationId: activeOrg.id,
           jiraDomain,
           jiraEmail,
-          jiraApiToken,
+          // If the field is blank and a connection already exists, tell the
+          // server to keep the existing encrypted token unchanged.
+          jiraApiToken: jiraApiToken || (connection ? "__KEEP__" : ""),
           defaultProjectKey,
           defaultIssueType,
         }),
@@ -370,11 +378,17 @@ export default function JiraSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="jiraApiToken">API Token *</Label>
+            <Label htmlFor="jiraApiToken">
+              API Token {connection?.hasToken ? "" : "*"}
+            </Label>
             <Input
               id="jiraApiToken"
               type="password"
-              placeholder="ATATT3xFfGF0..."
+              placeholder={
+                connection?.hasToken
+                  ? "Token saved — enter a new one to replace"
+                  : "ATATT3xFfGF0..."
+              }
               value={jiraApiToken}
               onChange={(e) => setJiraApiToken(e.target.value)}
               disabled={saving}

@@ -1,4 +1,5 @@
 // app/api/cron/send-standups/route.ts
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
@@ -11,16 +12,26 @@ import {
 import { eq, and, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ConfigWithFullData } from "@/lib/db-types";
+import { decrypt } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 
 function verifyCronSecret(req: NextRequest): boolean {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    return process.env.NODE_ENV === "development";
+    if (process.env.NODE_ENV === "development") return true;
+    console.error("CRON_SECRET is not set — rejecting request");
+    return false;
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  const expected = `Bearer ${cronSecret}`;
+  if (!authHeader || authHeader.length !== expected.length) return false;
+
+  // Timing-safe comparison to prevent timing attacks
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  return crypto.timingSafeEqual(a, b);
 }
 
 function getCurrentTimeInfo(timezone: string) {
@@ -154,6 +165,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Rate limit: 3 cron triggers per minute
+    const rl = rateLimit("cron:send-standups", { limit: 3, windowSeconds: 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+    }
+
     console.log("🔄 Cron job started - checking for standups to send");
 
     const configs = (await db.query.standupConfig.findMany({
@@ -233,6 +250,7 @@ export async function GET(req: NextRequest) {
         );
         const fallbackText = `[${config.team.name}] Time for your standup! Please answer ${config.questions.length} questions.`;
         const today = new Date().toISOString().split("T")[0];
+        const botToken = decrypt(workspace.botToken);
 
         for (const member of config.team.teamMembers) {
           if (!member.slackUserId) {
@@ -241,7 +259,7 @@ export async function GET(req: NextRequest) {
           }
 
           const result = await sendSlackDM(
-            workspace.botToken,
+            botToken,
             member.slackUserId,
             fallbackText,
             blocks

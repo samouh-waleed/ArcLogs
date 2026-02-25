@@ -1,7 +1,7 @@
 // app/api/teams/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { team, member, teamMember } from "@/drizzle/schema";
+import { team, member, teamMember, standupConfig } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -44,7 +44,7 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Fetch team members with relations (now it will work!)
+    // Fetch team members with relations
     const members = await db.query.teamMember.findMany({
       where: and(eq(teamMember.teamId, teamId), isNull(teamMember.deletedAt)),
       with: {
@@ -52,10 +52,20 @@ export async function GET(
       },
     });
 
+    // Fetch all non-deleted standup configs for the count display
+    const standupConfigs = await db.query.standupConfig.findMany({
+      where: and(
+        eq(standupConfig.teamId, teamId),
+        isNull(standupConfig.deletedAt)
+      ),
+      columns: { id: true, name: true, isActive: true },
+    });
+
     return NextResponse.json({
       team: {
         ...teamData,
         teamMembers: members,
+        standupConfigs,
       },
     });
   } catch (error) {

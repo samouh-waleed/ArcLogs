@@ -5,6 +5,7 @@ import { slackWorkspace, member } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { decrypt } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
       "https://slack.com/api/conversations.list?types=public_channel,private_channel",
       {
         headers: {
-          Authorization: `Bearer ${workspace.botToken}`,
+          Authorization: `Bearer ${decrypt(workspace.botToken)}`,
         },
       }
     );

@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { slackWorkspace, jiraConnection } from "@/drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import crypto from "crypto";
+import { decrypt } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 
 function verifySlackSignature(
   signingSecret: string,
@@ -164,6 +166,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
+    // Rate limit: 30 interactions per minute per workspace
+    const teamId = (() => {
+      try {
+        const p = new URLSearchParams(body);
+        const pl = p.get("payload");
+        return pl ? JSON.parse(pl)?.team?.id : "unknown";
+      } catch { return "unknown"; }
+    })();
+    const rl = rateLimit(`slack-interaction:${teamId}`, { limit: 30, windowSeconds: 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+    }
+
     // Parse the URL-encoded payload
     const params = new URLSearchParams(body);
     const payloadStr = params.get("payload");
@@ -213,7 +228,7 @@ export async function POST(req: NextRequest) {
           const issue = await createJiraIssue(
             jiraConn.jiraDomain,
             jiraConn.jiraEmail,
-            jiraConn.jiraApiToken,
+            decrypt(jiraConn.jiraApiToken),
             data.pk || jiraConn.defaultProjectKey || "",
             data.t || "Untitled",
             data.ty || "Task",

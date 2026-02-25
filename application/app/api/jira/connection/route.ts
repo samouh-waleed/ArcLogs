@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { nanoid } from "nanoid";
 import { canUseJira } from "@/lib/limits";
+import { encrypt } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -49,8 +50,14 @@ export async function GET(req: NextRequest) {
       ),
     });
 
+    if (!connection) {
+      return NextResponse.json({ connection: null });
+    }
+
+    // Never return the raw API token — only expose whether one is saved
+    const { jiraApiToken: _token, ...safeConnection } = connection;
     return NextResponse.json({
-      connection: connection || null,
+      connection: { ...safeConnection, hasToken: Boolean(_token) },
     });
   } catch (error) {
     console.error("Error fetching Jira connection:", error);
@@ -113,14 +120,20 @@ export async function POST(req: NextRequest) {
 
     let connection;
 
+    // "__KEEP__" is the sentinel the frontend sends when the user hasn't
+    // changed the token — keep the existing encrypted value in that case.
+    const isKeepingExistingToken =
+      !jiraApiToken || jiraApiToken === "__KEEP__";
+
     if (existingConnection) {
-      // Update existing connection
       const [updated] = await db
         .update(jiraConnection)
         .set({
           jiraDomain: jiraDomain.replace(/^https?:\/\//, ""),
           jiraEmail,
-          jiraApiToken, // In production, encrypt this!
+          ...(isKeepingExistingToken
+            ? {}
+            : { jiraApiToken: encrypt(jiraApiToken) }),
           defaultProjectKey: defaultProjectKey || null,
           defaultIssueType: defaultIssueType || "Task",
           isActive: true,
@@ -131,7 +144,13 @@ export async function POST(req: NextRequest) {
 
       connection = updated;
     } else {
-      // Create new connection
+      if (isKeepingExistingToken) {
+        return NextResponse.json(
+          { error: "API token is required for a new connection" },
+          { status: 400 }
+        );
+      }
+
       const [newConnection] = await db
         .insert(jiraConnection)
         .values({
@@ -139,7 +158,7 @@ export async function POST(req: NextRequest) {
           organizationId,
           jiraDomain: jiraDomain.replace(/^https?:\/\//, ""),
           jiraEmail,
-          jiraApiToken, // In production, encrypt this!
+          jiraApiToken: encrypt(jiraApiToken),
           defaultProjectKey: defaultProjectKey || null,
           defaultIssueType: defaultIssueType || "Task",
           isActive: true,
@@ -149,7 +168,12 @@ export async function POST(req: NextRequest) {
       connection = newConnection;
     }
 
-    return NextResponse.json({ connection }, { status: 200 });
+    // Strip the token before returning — never expose it to the client
+    const { jiraApiToken: _t, ...safeConn } = connection as any;
+    return NextResponse.json(
+      { connection: { ...safeConn, hasToken: true } },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error saving Jira connection:", error);
     return NextResponse.json(

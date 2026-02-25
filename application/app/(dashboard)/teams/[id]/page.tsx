@@ -25,7 +25,6 @@ import {
   Shield,
   User,
   TrendingUp,
-  Send,
   Loader2,
   CheckCircle,
   AlertCircle,
@@ -53,12 +52,7 @@ export default function TeamDetailPage() {
   const [team, setTeam] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [triggering, setTriggering] = useState(false);
   const [removingMember, setRemovingMember] = useState<string | null>(null);
-  const [triggerMessage, setTriggerMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
   useEffect(() => {
     async function loadTeam() {
@@ -100,41 +94,6 @@ export default function TeamDetailPage() {
     }
   };
 
-  const handleTriggerStandup = async () => {
-    setTriggering(true);
-    setTriggerMessage(null);
-    try {
-      const response = await fetch(`/api/teams/${teamId}/trigger-standup`, {
-        method: "POST",
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setTriggerMessage({
-          type: "success",
-          text: data.message || `Sent ${data.sent} standup prompt(s)!`,
-        });
-      } else {
-        setTriggerMessage({
-          type: "error",
-          text: data.error || "Failed to trigger standup",
-        });
-      }
-
-      // Clear message after 5 seconds
-      setTimeout(() => setTriggerMessage(null), 5000);
-    } catch (error) {
-      console.error("Failed to trigger standup:", error);
-      setTriggerMessage({
-        type: "error",
-        text: "Network error - failed to trigger standup",
-      });
-      setTimeout(() => setTriggerMessage(null), 5000);
-    } finally {
-      setTriggering(false);
-    }
-  };
 
   const handleRemoveMember = async (memberId: string) => {
     setRemovingMember(memberId);
@@ -229,110 +188,61 @@ export default function TeamDetailPage() {
         </div>
       </div>
 
-      {triggerMessage && (
-        <Alert
-          variant={triggerMessage.type === "error" ? "destructive" : "default"}
-          className={
-            triggerMessage.type === "success"
-              ? "bg-green-50 border-green-200"
-              : undefined
-          }
-        >
-          {triggerMessage.type === "success" ? (
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          ) : (
-            <AlertCircle className="h-4 w-4" />
-          )}
-          <AlertDescription
-            className={
-              triggerMessage.type === "success" ? "text-green-800" : undefined
-            }
-          >
-            {triggerMessage.text}
-          </AlertDescription>
-        </Alert>
-      )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+      {/* items-stretch makes all cards the same height; flex flex-col + mt-auto
+          on buttons pins them to the card bottom regardless of content height */}
+      <div className="grid gap-4 md:grid-cols-3 items-stretch">
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Members</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col flex-1">
             <div className="text-2xl font-bold">
               {team.teamMembers?.length || 0}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Standups</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-2xl font-bold">
-              {team.standupConfigs?.length || 0}
-            </div>
-            <div className="flex flex-col gap-1">
-              <Button variant="link" className="p-0 h-auto text-xs justify-start" asChild>
-                <Link href={`/teams/${team.id}/standups`}>Manage standups →</Link>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTriggerStandup}
-                disabled={triggering || (team.standupConfigs?.length || 0) === 0}
-                className="w-full"
-              >
-                {triggering ? (
-                  <>
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-3 w-3" />
-                    Test Standup
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Channel</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {team.slackChannelName ? (
-              <>
-                <div className="text-lg font-semibold">#{team.slackChannelName}</div>
-                <p className="text-xs text-muted-foreground">
-                  Daily digests posted here
-                </p>
-              </>
-            ) : (
-              <div className="text-sm text-muted-foreground">Not set</div>
-            )}
-            <Button variant="outline" size="sm" className="w-full" asChild>
-              <Link href={`/teams/${team.id}/settings`}>
-                {team.slackChannelName ? "Change Channel" : "Select Channel"}
-              </Link>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(team.teamMembers?.length || 0) === 1 ? "team member" : "team members"}
+            </p>
+            <Button variant="outline" size="sm" className="w-full mt-auto pt-0" asChild>
+              <Link href={`/teams/${team.id}/members`}>Manage Members</Link>
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Standups</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex flex-col flex-1">
+            <div className="text-2xl font-bold">
+              {team.standupConfigs?.length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(team.standupConfigs?.length || 0) === 0
+                ? "No standups configured"
+                : `${team.standupConfigs.filter((s: any) => s.isActive).length} active`}
+            </p>
+            <Button variant="outline" size="sm" className="w-full mt-auto" asChild>
+              <Link href={`/teams/${team.id}/standups`}>Manage Standups</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Analytics</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full" asChild>
+          <CardContent className="flex flex-col flex-1">
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Sentiment</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Blockers</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Participation</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Team health insights</p>
+            <Button variant="outline" size="sm" className="w-full mt-auto" asChild>
               <Link href={`/teams/${team.id}/analytics`}>View Analytics</Link>
             </Button>
           </CardContent>

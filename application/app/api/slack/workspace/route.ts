@@ -48,9 +48,13 @@ export async function GET(req: NextRequest) {
       ),
     });
 
-    return NextResponse.json({
-      workspace: workspace || null,
-    });
+    if (!workspace) {
+      return NextResponse.json({ workspace: null });
+    }
+
+    // Never expose the bot token to the frontend
+    const { botToken: _bt, ...safeWorkspace } = workspace;
+    return NextResponse.json({ workspace: safeWorkspace });
   } catch (error) {
     console.error("Error fetching Slack workspace:", error);
     return NextResponse.json(

@@ -13,7 +13,7 @@ import {
 } from "@/drizzle/schema";
 
 const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
+  apiVersion: "2026-01-28.clover",
 });
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -195,10 +195,15 @@ export const auth = betterAuth({
             name: "pro",
             priceId: process.env.STRIPE_PRO_PRICE_ID!,
           },
-          {
-            name: "enterprise",
-            priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID!,
-          },
+          // Only register enterprise plan when a Stripe price ID is configured
+          ...(process.env.STRIPE_ENTERPRISE_PRICE_ID
+            ? [
+                {
+                  name: "enterprise",
+                  priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID,
+                },
+              ]
+            : []),
         ],
         authorizeReference: async ({ user, referenceId, action }, ctx) => {
           try {
