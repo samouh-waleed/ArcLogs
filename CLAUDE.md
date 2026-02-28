@@ -225,10 +225,66 @@ uv run python main.py  # Start worker
 ```
 
 ### Local Development
-- Use **ngrok** to expose localhost:3000 for Slack webhooks
-- Slack events endpoint: `https://<ngrok-url>/api/slack/events`
-- Set `SLACK_SIGNING_SECRET` in application .env
+- Use **ngrok** to expose localhost:3000 for Slack webhooks: `ngrok http 3000`
+- After ngrok restarts and gives a new URL, run **`npm run dev:urls`** from `application/` — this auto-updates `.env` and the Stripe webhook endpoint, then prints a copy-paste checklist for Google/Slack/Microsoft consoles
+- Script location: `application/scripts/dev-urls.mjs`
+- Auto-updated: `BETTER_AUTH_BASE_URL`, `NEXT_PUBLIC_APP_URL`, Stripe webhook URL (+ `STRIPE_WEBHOOK_SECRET` if a new endpoint is created)
+- Manual (can't be API-automated): Google OAuth redirect URIs, Slack event/interactivity/OAuth URLs, Microsoft OAuth redirect URIs
+- After running the script: `Ctrl+C` → `npm run dev` to pick up the new `.env`
 - Debug scripts: `debug_audio.py`, `debug_sprint.py`, `debug_search.py`
+
+## Subscription Plans
+
+Plan limits are enforced in `lib/limits.ts`. The `subscription.plan` field (set by Better Auth Stripe plugin) is the source of truth. Plan names: `"free"` | `"pro"` | `"enterprise"`.
+
+| Limit / Feature | Free | Pro ($8/user/mo) |
+|---|---|---|
+| Organizations | 1 | Up to 5 |
+| Teams per org | 1 | Unlimited |
+| Org members | 5 | Unlimited (billed per member via Stripe) |
+| Standup configs per team | 1 | Unlimited |
+| Voice standups (Whisper) | ❌ | ✅ |
+| Jira automation | ❌ | ✅ |
+| History retention | 30 days | Unlimited |
+
+**Plan inheritance:** If a new org has no subscription, `getOrgPlan()` checks if the org owner has Pro on any other org they belong to and inherits that plan. This means a Pro user creating a second org gets Pro on it immediately without a separate Stripe subscription.
+
+**Env vars:** `STRIPE_PRO_PRICE_ID`, `STRIPE_ENTERPRISE_PRICE_ID` (see `.env.example`)
+
+**Frontend/API feature gate helpers:** `canUseVoice(orgId)`, `canUseJira(orgId)` in `lib/limits.ts`
+
+**Voice UI gate (implemented):**
+- `POST /api/standups` and `PUT /api/standups/[id]` — `canUseVoice(orgId)` clamps `allowVoiceResponses → false` for free orgs server-side
+- `standups/new/page.tsx`, `standups/[configId]/edit/page.tsx` — fetch `features.voice` from `/api/organization-usage`, show Skeleton while loading, Lock row with "Upgrade to Pro" link for free, normal Switch for pro
+- `components/team-setup-wizard.tsx` — same pattern; uses `voiceEnabled === false` (strict) so Switch stays visible while loading (`null`)
+
+**Worker feature gates (`worker/main.py`):**
+- `get_org_plan(cur, organization_id)` — Python mirror of `getOrgPlan()`, reads `subscription.plan`
+- Voice gate in `process_audio_standup`: checked after `bot_token` is set, before `download_slack_file`. Free plan → DM user + mark response `failed` + return early.
+- Jira gate in `process_standup_response`: checked after `jira_connection` is resolved, before `sync_to_jira`. Free plan → sets `jira_connection = None`, which also skips task transitions (both blocks already gated on `if jira_connection`).
+
+**Architecture decision:** Slack workspace and Jira connection remain org-level (one per org). Teams select a channel from the org's Slack workspace. Team-level Jira project overrides (`team.jiraProjectKey`) handle the case where teams work on different Jira projects.
+
+**Dashboard upgrade prompts (implemented):**
+- `app/(dashboard)/page.tsx` — fetches `/api/organization-usage` on mount; renders a plan status banner for free orgs (amber/at-limit or blue/below-limit) with usage pills and "Upgrade" CTA → `/billing`; each stat card (Teams, Members, Standups) shows a `Progress` bar + `X/limit` text with `text-destructive` when at 100%
+- `app/(dashboard)/billing/page.tsx` — fixed `currentPlan` to read `activeSubscription.plan` instead of hardcoded `"pro"` (enterprise was misidentified); fixed usage display to handle `null` limits (`"/ ∞"`); at-limit counts shown in `text-destructive`
+
+**Stripe subscription webhook callbacks (`lib/auth.ts`):**
+- Better Auth's Stripe plugin handles all Stripe webhook events automatically at `/api/auth/[...all]` (already in `publicRoutes` — no middleware change needed)
+- `getOrgOwnerEmail(orgId)` — helper that queries `member` (role=owner) + `user` tables to get the org owner's name/email for transactional emails
+- `onSubscriptionComplete` — sends "You're on Pro/Enterprise" upgrade confirmation email via Resend listing unlocked features
+- `onSubscriptionUpdate` — logs id/org/status/plan with structured output
+- `onSubscriptionCancel` — sends "Your subscription has ended" email via Resend listing what changes on Free + a Resubscribe CTA button
+- Callbacks are wrapped in try/catch so email failures never break the webhook acknowledgement
+- Schema imports aliased: `user as userTable` added alongside existing `member as memberTable`, `subscription as subscriptionTable`
+
+**Jira UI gate (implemented):**
+- `POST /api/jira/connection` — returns 403 `{ upgradeRequired: true }` on free plan
+- `POST /api/jira/test-connection` — accepts `organizationId` in body, returns 403 on free plan
+- `app/(dashboard)/settings/jira/page.tsx` — fetches `features.jira` from `/api/organization-usage`, shows upgrade wall (Lock icon + "Upgrade to Pro" → `/billing`) on free
+- `components/team-jira-config.tsx` — same upgrade wall pattern
+
+**Multi-org support:** `auth.ts` `organizationLimit` is an async function. Returns `true` (block) if `currentOrgCount >= maxOrgs`. `maxOrgs = 5` for Pro or Enterprise users (any of their existing orgs has active/trialing Pro/Enterprise subscription), otherwise `maxOrgs = 1` for Free. The "Create Organization" option in the Sidebar is only shown to Pro users who haven't hit the 5-org cap. Navigates to `/create-organization?new=1` (the `?new=1` param skips the "redirect if has orgs" logic, allowing intentional new org creation). After creation, `window.location.href = "/"` forces a full reload to clear Better Auth and React Query caches so the new org appears in the org switcher immediately.
 
 ## Current Feature Status (Feb 2026)
 
@@ -270,6 +326,55 @@ Note: [~] = implemented but not fully end-to-end tested in production-like scena
 - [ ] Monitoring/error tracking (Sentry)
 - [ ] Unit/integration tests
 - [ ] Team analytics & reporting (sentiment trends, velocity, weekly summaries)
+
+## Analytics Fixes (Feb 2026)
+**Files:** `app/api/teams/[id]/analytics/route.ts`, `app/(dashboard)/teams/[id]/analytics/page.tsx`, `app/(dashboard)/analytics/page.tsx`
+
+Key bugs fixed:
+1. **`awaiting_response` inflation** — cron pre-creates standup records before user replies; all count queries now add `AND processing_status != 'awaiting_response'` (response rate, total responses, member participation)
+2. **Participation % denominator** — was dividing by calendar days (e.g. 30); now uses `analytics.responseRate.length` = actual days standups occurred, so Mon-Fri teams correctly show 100% for perfect responders
+3. **Org sentiment unweighted** — now weighted by `total_responses` per team; teams with 0 responses excluded
+4. **NULL sentiment counted as neutral** — added `AND ai_insights->>'sentiment' IS NOT NULL` to query; page skips null rows instead of bucketing as neutral
+5. **Processing time "0s"** — shows "—" when `avgProcessingTime` is null/0
+6. **Blank page on no data** — both analytics pages now show a proper empty state
+7. **Division by zero in response rate** — guarded `item.total_members > 0`
+8. **New stats added**: `completedResponses` (AI pipeline health), `voiceResponses`/`textResponses` (response type breakdown card)
+
+## Slack Workspace Switching (fixed)
+- **Root bug**: OAuth route searched for existing workspace by `slackTeamId` (Slack's ID), not `organizationId`. Switching workspaces created a second active record; `findFirst` returned the stale one.
+- **Fix**: OAuth now finds the org's current active workspace by `organizationId` first. If the new workspace has a different `slackTeamId` (i.e. switching), it: (1) soft-deletes the old workspace record, (2) clears `slackUserId` for all team members in the org (their IDs came from the old workspace), (3) creates/restores the new workspace record.
+- **Dashboard**: `slack_switched` redirect shows "workspace switched, re-add members" banner.
+- **Standups page**: replaced `alert()` with inline `Alert` components; adds a persistent amber warning banner when any team member has no `slackUserId`, with a direct link to the members picker.
+
+## Multi-User / Session Isolation (fixed bugs)
+- `GET /api/slack/workspace` — added membership check (was missing, any user could see any org's Slack bot)
+- `GET /api/slack/channels` — added membership check (same issue)
+- `GET /api/jira/connection` — added membership check (same issue)
+- `create-organization/page.tsx` — removed trust in client-cached `activeOrg`; always calls `authClient.organization.list()` server-side. Previously `else if (activeOrg) { router.push("/") }` would send a new user straight to the dashboard if the auth client had stale org data from the previous user.
+- `Sidebar.tsx` `handleSignOut` — changed `router.push("/login")` to `window.location.href = "/login"` to force a full page reload, clearing all React state and auth-client in-memory caches between users.
+
+## Standup Thread-Based Routing (multi-team users)
+
+When a user is in multiple teams and both teams send standups, the bot sends separate messages for each team. The cron job pre-creates a `standup_response` row with `processingStatus = 'awaiting_response'` for each user+config, storing the Slack message `ts` in `slackMessageTs`. The message instructs users to **Reply in this thread**. When the user replies in a thread, `event.thread_ts = bot_message_ts` → events handler looks up the matching `awaiting_response` record → routes to the correct team's config. If the user types directly in the DM (no thread), the fallback picks the oldest unanswered standup and notifies them about other pending teams. `processingStatus` values: `awaiting_response` (pre-created) → `pending` (user replied, queued for AI) → `completed` / `failed`. Analytics queries must exclude `awaiting_response` records to avoid inflating response counts.
+
+## Slack Workspace Switching
+
+When an admin connects a **different** Slack workspace (not the same one reconnected), `app/api/slack/oauth/route.ts`:
+1. Finds the org's current active workspace by `organizationId` (not `slackTeamId`)
+2. Soft-deletes the old workspace record
+3. Clears `slackUserId` for all team members in the org (their IDs came from the old workspace)
+4. Redirects with `?success=slack_switched` banner warning admin to re-add membersAfter switching, the "Add Members" picker shows which Slack users are already in teams (Linked/Needs linking/New) and pre-selects "Needs linking" users for fast re-linking.
+
+## Analytics
+
+**Files:** `app/api/teams/[id]/analytics/route.ts`, `app/(dashboard)/teams/[id]/analytics/page.tsx`, `app/(dashboard)/analytics/page.tsx`
+
+Key correctness rules:
+- All response count queries exclude `processing_status = 'awaiting_response'` (pre-created, not yet answered)
+- Participation % denominator = `analytics.responseRate.length` (actual standup days) not the calendar time range
+- Org-level sentiment is weighted by `total_responses` per team (not simple average)
+- `avgProcessingTime` returns `null` when no completed responses → UI shows `"—"` not `"0s"`
+- Sentiment query includes `AND ai_insights->>'sentiment' IS NOT NULL` to exclude unprocessed rows
 
 ## Conventions
 - **IDs**: nanoid for application-generated IDs, gen_random_uuid()::text in worker SQL

@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ teamId: string; userId: string }> }
+  { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -19,7 +19,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { teamId, userId } = await params;
+    const { id: teamId, userId } = await params;
 
     // Get team
     const existingTeam = await db.query.team.findFirst({

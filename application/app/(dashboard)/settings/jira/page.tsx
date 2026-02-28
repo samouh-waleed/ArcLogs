@@ -30,13 +30,15 @@ import {
   ExternalLink,
   Trash2,
   TestTube,
+  Lock,
 } from "lucide-react";
+import Link from "next/link";
 
 interface JiraConnection {
   id: string;
   jiraDomain: string;
   jiraEmail: string;
-  jiraApiToken: string;
+  hasToken: boolean;  // token is never returned — only whether one is saved
   defaultProjectKey: string | null;
   defaultIssueType: string;
   isActive: boolean;
@@ -71,12 +73,24 @@ export default function JiraSettingsPage() {
     error?: string;
   } | null>(null);
 
-  // Load existing connection
+  const [jiraEnabled, setJiraEnabled] = useState<boolean | null>(null); // null = still loading
+
+  // Load existing connection + check plan
   useEffect(() => {
     async function loadConnection() {
       if (!activeOrg?.id) return;
 
       try {
+        // Check if plan allows Jira before loading anything else
+        const usageRes = await fetch(
+          `/api/organization-usage?orgId=${activeOrg.id}`
+        );
+        if (usageRes.ok) {
+          const usage = await usageRes.json();
+          setJiraEnabled(usage.features?.jira ?? false);
+          if (!usage.features?.jira) return; // skip connection fetch for free plan
+        }
+
         const response = await fetch(
           `/api/jira/connection?orgId=${activeOrg.id}`
         );
@@ -86,7 +100,10 @@ export default function JiraSettingsPage() {
             setConnection(data.connection);
             setJiraDomain(data.connection.jiraDomain);
             setJiraEmail(data.connection.jiraEmail);
-            setJiraApiToken(data.connection.jiraApiToken);
+            // Never pre-populate the token — it's never returned from the API.
+            // Leave jiraApiToken empty; the submit handler sends "__KEEP__" if
+            // the user hasn't entered a new one.
+            setJiraApiToken("");
             setDefaultProjectKey(data.connection.defaultProjectKey || "");
             setDefaultIssueType(data.connection.defaultIssueType || "Task");
           }
@@ -113,6 +130,7 @@ export default function JiraSettingsPage() {
           jiraDomain,
           jiraEmail,
           jiraApiToken,
+          organizationId: activeOrg?.id,
         }),
       });
 
@@ -154,10 +172,13 @@ export default function JiraSettingsPage() {
     if (!activeOrg?.id) return;
 
     // Validate required fields
-    if (!jiraDomain || !jiraEmail || !jiraApiToken || !defaultProjectKey) {
+    const tokenRequired = !connection; // only required for new connections
+    if (!jiraDomain || !jiraEmail || (tokenRequired && !jiraApiToken) || !defaultProjectKey) {
       setMessage({
         type: "error",
-        text: "Please fill in all required fields (Domain, Email, API Token, and Project Key)",
+        text: tokenRequired
+          ? "Please fill in all required fields (Domain, Email, API Token, and Project Key)"
+          : "Please fill in all required fields (Domain, Email, and Project Key)",
       });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -173,7 +194,9 @@ export default function JiraSettingsPage() {
           organizationId: activeOrg.id,
           jiraDomain,
           jiraEmail,
-          jiraApiToken,
+          // If the field is blank and a connection already exists, tell the
+          // server to keep the existing encrypted token unchanged.
+          jiraApiToken: jiraApiToken || (connection ? "__KEEP__" : ""),
           defaultProjectKey,
           defaultIssueType,
         }),
@@ -245,11 +268,41 @@ export default function JiraSettingsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || jiraEnabled === null) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (!jiraEnabled) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Jira Integration</h1>
+          <p className="text-muted-foreground">
+            Connect your Jira workspace to automatically create tickets from standup blockers
+          </p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center text-center py-12 gap-4">
+            <div className="rounded-full bg-muted p-4">
+              <Lock className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Jira integration is a Pro feature</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Upgrade to Pro to connect Jira and unlock automatic ticket creation,
+                status transitions, and smart comments from your standups.
+              </p>
+            </div>
+            <Button asChild>
+              <Link href="/billing">Upgrade to Pro</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -325,11 +378,17 @@ export default function JiraSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="jiraApiToken">API Token *</Label>
+            <Label htmlFor="jiraApiToken">
+              API Token {connection?.hasToken ? "" : "*"}
+            </Label>
             <Input
               id="jiraApiToken"
               type="password"
-              placeholder="ATATT3xFfGF0..."
+              placeholder={
+                connection?.hasToken
+                  ? "Token saved — enter a new one to replace"
+                  : "ATATT3xFfGF0..."
+              }
               value={jiraApiToken}
               onChange={(e) => setJiraApiToken(e.target.value)}
               disabled={saving}

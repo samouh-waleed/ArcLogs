@@ -271,6 +271,8 @@ export const team = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     slackChannelId: text("slack_channel_id"),
     slackChannelName: text("slack_channel_name"),
+    jiraProjectKey: text("jira_project_key"), // Team-level Jira project override
+    jiraBoardId: text("jira_board_id"), // Team-level Jira board override
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

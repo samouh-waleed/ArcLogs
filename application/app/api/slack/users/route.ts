@@ -1,10 +1,11 @@
 // app/api/slack/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { slackWorkspace } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { slackWorkspace, member } from "@/drizzle/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { decrypt } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,9 +27,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get Slack workspace
+    // Verify the requesting user belongs to this org
+    const membership = await db.query.member.findFirst({
+      where: and(
+        eq(member.organizationId, orgId),
+        eq(member.userId, session.user.id),
+        isNull(member.deletedAt)
+      ),
+    });
+
+    if (!membership) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Get Slack workspace (only active, non-deleted connections)
     const workspace = await db.query.slackWorkspace.findFirst({
-      where: eq(slackWorkspace.organizationId, orgId),
+      where: and(
+        eq(slackWorkspace.organizationId, orgId),
+        isNull(slackWorkspace.deletedAt)
+      ),
     });
 
     if (!workspace) {
@@ -41,7 +58,7 @@ export async function GET(req: NextRequest) {
     // Fetch users from Slack API
     const response = await fetch("https://slack.com/api/users.list", {
       headers: {
-        Authorization: `Bearer ${workspace.botToken}`,
+        Authorization: `Bearer ${decrypt(workspace.botToken)}`,
       },
     });
 

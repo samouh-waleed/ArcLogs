@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -21,17 +21,60 @@ import {
   Users,
   MessageSquare,
   TrendingUp,
+  Crown,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import Link from "next/link";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
+
+// ── Module-level cache ────────────────────────────────────────────────────────
+// Persists across client-side navigations (Next.js soft route changes).
+// Cleared only on hard refresh. Keyed by org ID so org-switching works.
+interface DashboardSnapshot {
+  slackWorkspace: any;
+  jiraConnected: boolean;
+  teamsCount: number;
+  membersCount: number;
+  standupsCount: number;
+  usage: any;
+}
+const _dashCache: Record<string, { data: DashboardSnapshot; ts: number }> = {};
+const DASH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function getDashCache(orgId: string): DashboardSnapshot | null {
+  const entry = _dashCache[orgId];
+  if (entry && Date.now() - entry.ts < DASH_CACHE_TTL) return entry.data;
+  return null;
+}
+function setDashCache(orgId: string, data: DashboardSnapshot) {
+  _dashCache[orgId] = { data, ts: Date.now() };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center p-8"><Skeleton className="h-8 w-48" /></div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [slackWorkspace, setSlackWorkspace] = useState<any>(null);
   const [loadingSlack, setLoadingSlack] = useState(true);
+  const [jiraConnected, setJiraConnected] = useState(false);
+  const [loadingJira, setLoadingJira] = useState(true);
+  const [teamsCount, setTeamsCount] = useState(0);
+  const [membersCount, setMembersCount] = useState(0);
+  const [standupsCount, setStandupsCount] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [usage, setUsage] = useState<any>(null);
 
   const { data: session, isPending: isLoadingSession } =
     authClient.useSession();
@@ -46,6 +89,12 @@ export default function DashboardPage() {
     if (success === "slack_connected") {
       setMessage({ type: "success", text: "Slack connected successfully!" });
       router.replace("/");
+    } else if (success === "slack_switched") {
+      setMessage({
+        type: "success",
+        text: "Slack workspace switched! Team members have been unlinked — go to each team and re-add members from the new workspace.",
+      });
+      router.replace("/");
     } else if (error) {
       setMessage({
         type: "error",
@@ -58,28 +107,113 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [searchParams, router]);
 
-  // Load Slack workspace
+  // Single effect that loads all dashboard data with cache support.
+  // On revisit: cache hit → state populated instantly (no skeleton wait).
+  // Always re-fetches in background and updates cache for next visit.
   useEffect(() => {
-    async function loadSlackWorkspace() {
-      if (!activeOrg?.id) return;
+    if (!activeOrg?.id) return;
+    const orgId = activeOrg.id;
 
-      try {
-        const response = await fetch(
-          `/api/slack/workspace?orgId=${activeOrg.id}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setSlackWorkspace(data.workspace);
-        }
-      } catch (error) {
-        console.error("Failed to load Slack workspace:", error);
-      } finally {
-        setLoadingSlack(false);
-      }
+    // Populate from cache immediately — skips the loading skeleton on revisit
+    const cached = getDashCache(orgId);
+    if (cached) {
+      setSlackWorkspace(cached.slackWorkspace);
+      setJiraConnected(cached.jiraConnected);
+      setTeamsCount(cached.teamsCount);
+      setMembersCount(cached.membersCount);
+      setStandupsCount(cached.standupsCount);
+      setUsage(cached.usage);
+      setLoadingSlack(false);
+      setLoadingJira(false);
+      setLoadingStats(false);
     }
 
-    loadSlackWorkspace();
+    // Always fetch fresh data (in background if cache was used)
+    async function fetchAll() {
+      const [slackRes, jiraRes, teamsRes, usageRes] = await Promise.allSettled([
+        fetch(`/api/slack/workspace?orgId=${orgId}`),
+        fetch(`/api/jira/connection?orgId=${orgId}`),
+        fetch(`/api/teams?orgId=${orgId}`),
+        fetch(`/api/organization-usage?orgId=${orgId}`),
+      ]);
+
+      let newSlack = cached?.slackWorkspace ?? null;
+      let newJira = cached?.jiraConnected ?? false;
+      let newTeams = cached?.teamsCount ?? 0;
+      let newMembers = cached?.membersCount ?? 0;
+      let newStandups = cached?.standupsCount ?? 0;
+      let newUsage = cached?.usage ?? null;
+
+      if (slackRes.status === "fulfilled" && slackRes.value.ok) {
+        const d = await slackRes.value.json();
+        newSlack = d.workspace ?? null;
+        setSlackWorkspace(newSlack);
+      }
+      setLoadingSlack(false);
+
+      if (jiraRes.status === "fulfilled" && jiraRes.value.ok) {
+        const d = await jiraRes.value.json();
+        newJira = !!d.connection;
+        setJiraConnected(newJira);
+      }
+      setLoadingJira(false);
+
+      if (usageRes.status === "fulfilled" && usageRes.value.ok) {
+        newUsage = await usageRes.value.json();
+        setUsage(newUsage);
+      }
+
+      if (teamsRes.status === "fulfilled" && teamsRes.value.ok) {
+        const teamsData = await teamsRes.value.json();
+        const teams = teamsData.teams || [];
+        newTeams = teams.length;
+        setTeamsCount(newTeams);
+
+        // Fetch members + standups for all teams in parallel
+        if (teams.length > 0) {
+          const memberAndStandupResults = await Promise.allSettled(
+            teams.flatMap((team: any) => [
+              fetch(`/api/teams/${team.id}/members`),
+              fetch(`/api/standups?teamId=${team.id}`),
+            ])
+          );
+
+          let totalMembers = 0;
+          let totalStandups = 0;
+          for (let i = 0; i < memberAndStandupResults.length; i += 2) {
+            const mRes = memberAndStandupResults[i];
+            const sRes = memberAndStandupResults[i + 1];
+            if (mRes.status === "fulfilled" && mRes.value.ok) {
+              const d = await mRes.value.json();
+              totalMembers += d.members?.length || 0;
+            }
+            if (sRes.status === "fulfilled" && sRes.value.ok) {
+              const d = await sRes.value.json();
+              totalStandups += d.standups?.length || 0;
+            }
+          }
+          newMembers = totalMembers;
+          newStandups = totalStandups;
+          setMembersCount(newMembers);
+          setStandupsCount(newStandups);
+        }
+      }
+      setLoadingStats(false);
+
+      // Update cache with fresh data
+      setDashCache(orgId, {
+        slackWorkspace: newSlack,
+        jiraConnected: newJira,
+        teamsCount: newTeams,
+        membersCount: newMembers,
+        standupsCount: newStandups,
+        usage: newUsage,
+      });
+    }
+
+    fetchAll().catch(console.error);
   }, [activeOrg?.id]);
+
 
   const handleConnectSlack = () => {
     if (!activeOrg?.id) return;
@@ -92,7 +226,7 @@ export default function DashboardPage() {
     );
     slackAuthUrl.searchParams.set(
       "scope",
-      "channels:read,chat:write,im:write,users:read,users:read.email"
+      "channels:read,chat:write,im:write,im:history,users:read,users:read.email,files:read,app_mentions:read"
     );
     slackAuthUrl.searchParams.set(
       "redirect_uri",
@@ -224,6 +358,92 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Plan status banner — free plan only */}
+      {usage && usage.plan === "free" && (() => {
+        const atLimit =
+          usage.teams.percentage >= 100 ||
+          usage.members.percentage >= 100 ||
+          usage.standups.percentage >= 100;
+        return (
+          <Card
+            className={
+              atLimit
+                ? "border-amber-300 bg-amber-50"
+                : "border-blue-200 bg-blue-50"
+            }
+          >
+            <CardContent className="py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {atLimit ? (
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                    ) : (
+                      <Crown className="h-4 w-4 shrink-0 text-blue-600" />
+                    )}
+                    <p
+                      className={`font-medium text-sm ${
+                        atLimit ? "text-amber-900" : "text-blue-900"
+                      }`}
+                    >
+                      {atLimit
+                        ? "You've reached your Free plan limits"
+                        : "You're on the Free plan"}
+                    </p>
+                  </div>
+                  <p
+                    className={`text-xs ${
+                      atLimit ? "text-amber-700" : "text-blue-700"
+                    }`}
+                  >
+                    {atLimit
+                      ? "Upgrade to Pro for unlimited teams, 50 members, voice standups, and Jira automation."
+                      : "Voice standups and Jira automation are locked. Upgrade to Pro to unlock all features."}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "Teams", ...usage.teams },
+                      { label: "Members", ...usage.members },
+                    ].map((item) => (
+                      <span
+                        key={item.label}
+                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                          item.percentage >= 100
+                            ? "bg-red-100 border-red-300 text-red-700"
+                            : item.percentage >= 80
+                            ? "bg-amber-100 border-amber-300 text-amber-700"
+                            : "bg-white/70 border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {item.label}: {item.current}/{item.limit}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Button size="sm" asChild className="shrink-0">
+                  <Link href="/billing">
+                    <Crown className="h-3 w-3 mr-1" />
+                    Upgrade
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Onboarding Checklist */}
+      {activeOrg && !loadingSlack && !loadingJira && !loadingStats && (
+        <OnboardingChecklist
+          slackConnected={!!slackWorkspace}
+          jiraConnected={jiraConnected}
+          hasTeams={teamsCount > 0}
+          hasMembers={membersCount > 0}
+          hasStandups={standupsCount > 0}
+          organizationId={activeOrg.id}
+        />
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -231,87 +451,110 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">
-              No teams created yet
-            </p>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{teamsCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {teamsCount === 0
+                    ? "No teams created yet"
+                    : `${teamsCount} team${teamsCount === 1 ? "" : "s"}`}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress value={usage.teams.percentage} className="h-1" />
+                    <p
+                      className={`text-xs ${
+                        usage.teams.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.teams.current} / {usage.teams.limit} used
+                      {usage.teams.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Updates</CardTitle>
+            <CardTitle className="text-sm font-medium">Members</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{membersCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {membersCount === 0 ? "No members yet" : "Across all teams"}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress value={usage.members.percentage} className="h-1" />
+                    <p
+                      className={`text-xs ${
+                        usage.members.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.members.current} / {usage.members.limit} used
+                      {usage.members.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Standups</CardTitle>
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">This week</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Insights</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Active insights</p>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{standupsCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {standupsCount === 0
+                    ? "No standups configured"
+                    : `Active configuration${standupsCount === 1 ? "" : "s"}`}
+                </p>
+                {usage?.plan === "free" && (
+                  <div className="mt-2 space-y-1">
+                    <Progress
+                      value={usage.standups.percentage}
+                      className="h-1"
+                    />
+                    <p
+                      className={`text-xs ${
+                        usage.standups.percentage >= 100
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {usage.standups.current} / {usage.standups.limit} used
+                      {usage.standups.percentage >= 100 && " · Limit reached"}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {!slackWorkspace && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>
-              Follow these steps to set up ArcLogs for your team
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ol className="space-y-4">
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary text-sm font-semibold">
-                  1
-                </div>
-                <div>
-                  <h4 className="font-medium">Connect Slack</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Install the ArcLogs bot in your Slack workspace
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold text-muted-foreground">
-                  2
-                </div>
-                <div>
-                  <h4 className="font-medium text-muted-foreground">
-                    Create Teams
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Organize your organization into teams
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold text-muted-foreground">
-                  3
-                </div>
-                <div>
-                  <h4 className="font-medium text-muted-foreground">
-                    Configure Standups
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Set up questions and schedule for each team
-                  </p>
-                </div>
-              </li>
-            </ol>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     if (!limitCheck.allowed) {
       return NextResponse.json(
         {
-          error: `Team limit reached (${limitCheck.currentCount}/${limitCheck.limit}). Please upgrade your subscription.`,
+          error: `Team limit reached (${limitCheck.currentCount}/${limitCheck.limit}) on the ${limitCheck.plan} plan. Please upgrade your subscription.`,
         },
         { status: 403 }
       );

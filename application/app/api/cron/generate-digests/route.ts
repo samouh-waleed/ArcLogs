@@ -1,5 +1,7 @@
 // app/api/cron/generate-digests/route.ts
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { db } from "@/lib/db";
 import { team, standupConfig } from "@/drizzle/schema";
@@ -18,16 +20,30 @@ function verifyCronSecret(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    return process.env.NODE_ENV === "development";
+    if (process.env.NODE_ENV === "development") return true;
+    console.error("CRON_SECRET is not set — rejecting request");
+    return false;
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  const expected = `Bearer ${cronSecret}`;
+  if (!authHeader || authHeader.length !== expected.length) return false;
+
+  // Timing-safe comparison to prevent timing attacks
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  return crypto.timingSafeEqual(a, b);
 }
 
 export async function GET(req: NextRequest) {
   try {
     if (!verifyCronSecret(req)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit: 3 cron triggers per minute
+    const rl = rateLimit("cron:generate-digests", { limit: 3, windowSeconds: 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
     }
 
     console.log("📊 Generating daily digests");

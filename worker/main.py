@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import base64
 import boto3
 from dotenv import load_dotenv
 from agno.agent import Agent
@@ -26,6 +27,57 @@ except ImportError:
     print("⚠️ pgvector not installed, embeddings disabled")
 
 load_dotenv()
+
+# ── Sentry error monitoring ──────────────────────────────────────────────────
+import sentry_sdk
+
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+    print("Sentry initialized")
+
+# ── Secret decryption ─────────────────────────────────────────────────────────
+# Mirrors lib/crypto.ts in the Next.js app.
+# Stored format:  base64(iv):base64(authTag):base64(ciphertext)   (AES-256-GCM)
+# Falls back to returning the raw value if it doesn't look encrypted, so
+# existing plaintext values keep working while the DB migration runs.
+
+def decrypt_value(text: str) -> str:
+    """Decrypt an AES-256-GCM value encrypted by the Next.js app.
+
+    Returns the plaintext, or the original text if it is not in the encrypted
+    format (graceful fallback for legacy plaintext values).
+    """
+    if not text or text.count(":") != 2:
+        return text  # plaintext fallback
+
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        key_hex = os.getenv("ENCRYPTION_KEY", "")
+        if not key_hex:
+            print("⚠️ ENCRYPTION_KEY not set — using value as-is")
+            return text
+
+        iv_b64, auth_tag_b64, ciphertext_b64 = text.split(":")
+        iv = base64.b64decode(iv_b64)
+        auth_tag = base64.b64decode(auth_tag_b64)
+        ciphertext = base64.b64decode(ciphertext_b64)
+
+        key = bytes.fromhex(key_hex)
+        aesgcm = AESGCM(key)
+        # Python's cryptography library expects ciphertext + authTag concatenated
+        decrypted = aesgcm.decrypt(iv, ciphertext + auth_tag, None)
+        return decrypted.decode("utf-8")
+    except Exception as e:
+        print(f"⚠️ decrypt_value() failed: {e} — using value as-is")
+        return text
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 # Configuration
 SQS_QUEUE_URL = os.getenv("AWS_SQS_QUEUE_URL")
@@ -112,7 +164,7 @@ def get_sprint_issues_cached(jira_connection: Dict) -> List[Dict]:
     jc = JiraClient(
         domain=jira_connection["jira_domain"],
         email=jira_connection["jira_email"],
-        api_token=jira_connection["jira_api_token"],
+        api_token=decrypt_value(jira_connection["jira_api_token"]),
     )
     issues = jc.get_sprint_issues(pk)
     set_cached(cache_key, issues)
@@ -128,7 +180,7 @@ def get_board_columns_cached(jira_connection: Dict) -> List[str]:
     jc = JiraClient(
         domain=jira_connection["jira_domain"],
         email=jira_connection["jira_email"],
-        api_token=jira_connection["jira_api_token"],
+        api_token=decrypt_value(jira_connection["jira_api_token"]),
     )
     columns = jc.get_board_columns(pk)
     set_cached(cache_key, columns)
@@ -395,6 +447,27 @@ def get_jira_connection(cur, organization_id: str) -> Optional[Dict]:
           AND deleted_at IS NULL
     """, (organization_id,))
     return cur.fetchone()
+
+
+def get_org_plan(cur, organization_id: str) -> str:
+    """Return active plan name ('free', 'pro', 'enterprise') for the given org.
+
+    Mirrors lib/limits.ts getOrgPlan(). Reads subscription.plan for the most
+    recent active or trialing subscription. Falls back to 'free'.
+    """
+    cur.execute("""
+        SELECT plan
+        FROM subscription
+        WHERE reference_id = %s
+          AND status IN ('active', 'trialing')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (organization_id,))
+    row = cur.fetchone()
+    if not row or not row["plan"]:
+        return "free"
+    plan = row["plan"]
+    return plan if plan in ("pro", "enterprise") else "free"
 
 
 # Check if Jira link already exists (idempotency)
@@ -926,7 +999,7 @@ def sync_to_jira(
         jira_client = JiraClient(
             domain=jira_connection["jira_domain"],
             email=jira_connection["jira_email"],
-            api_token=jira_connection["jira_api_token"],
+            api_token=decrypt_value(jira_connection["jira_api_token"]),
         )
 
         jira_intent = insights.get("jira_intent", "none")
@@ -1257,7 +1330,25 @@ def process_audio_standup(message_data: Dict):
             print(f"❌ No workspace found for org {response_data['organization_id']}")
             return
 
-        bot_token = workspace["bot_token"]
+        bot_token = decrypt_value(workspace["bot_token"])
+
+        # ── Voice feature gate ────────────────────────────────────────────
+        org_plan = get_org_plan(cur, response_data["organization_id"])
+        if org_plan == "free":
+            print(f"⛔ Voice standups not available on free plan (org {response_data['organization_id']})")
+            send_slack_notification(
+                bot_token,
+                response_data["slack_user_id"],
+                "⚠️ *Voice standups require a Pro plan.*\n\nPlease type your standup response, or upgrade your plan to use voice.",
+            )
+            cur.execute("""
+                UPDATE standup_response
+                SET processing_status = 'failed', updated_at = NOW()
+                WHERE id = %s
+            """, (response_id,))
+            conn.commit()
+            return
+        # ── End voice gate ────────────────────────────────────────────────
 
         # Step 1: Download audio from Slack
         print(f"📥 Downloading audio from Slack...")
@@ -1365,7 +1456,7 @@ def process_audio_standup(message_data: Dict):
             row = cur.fetchone()
             if row:
                 send_slack_notification(
-                    row["bot_token"],
+                    decrypt_value(row["bot_token"]),
                     row["slack_user_id"],
                     "⚠️ There was an error processing your audio. Please try again or type your response.",
                 )
@@ -1510,6 +1601,16 @@ def process_standup_response(message_data: Dict):
             jira_connection = get_jira_connection(cur, response_data["organization_id"])
         jira_results = []
 
+        # ── Jira feature gate ─────────────────────────────────────────────
+        # Nulling jira_connection disables both sync_to_jira and task
+        # transitions below, since both blocks are gated on `if jira_connection`.
+        if jira_connection:
+            org_plan = get_org_plan(cur, response_data["organization_id"])
+            if org_plan == "free":
+                print(f"⛔ Jira integration not available on free plan (org {response_data['organization_id']})")
+                jira_connection = None
+        # ── End Jira gate ─────────────────────────────────────────────────
+
         if jira_connection:
             print(f"🔧 Jira connection found, syncing...")
             jira_results = sync_to_jira(
@@ -1538,7 +1639,7 @@ def process_standup_response(message_data: Dict):
             conn.commit()
             return
 
-        bot_token = workspace["bot_token"]
+        bot_token = decrypt_value(workspace["bot_token"])
 
         # Process help requests
         help_requests = insights.get("help_needed", [])
@@ -1780,7 +1881,7 @@ From their standup:
                 jira_client = JiraClient(
                     domain=jira_connection["jira_domain"],
                     email=jira_connection["jira_email"],
-                    api_token=jira_connection["jira_api_token"],
+                    api_token=decrypt_value(jira_connection["jira_api_token"]),
                 )
 
                 # Fetch sprint issues once for matching

@@ -11,14 +11,22 @@ import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { ConfigWithFullData } from "@/lib/db-types";
+import { decrypt } from "@/lib/crypto";
 
-function buildStandupBlocks(questions: any[], standupConfigId: string) {
+function buildStandupBlocks(
+  questions: any[],
+  standupConfigId: string,
+  teamName: string,
+  configName: string
+) {
   const blocks: any[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "👋 *[TEST] Time for your daily standup!*\n\nPlease answer the following questions:",
+        text: `👋 *[${teamName}] Time for your standup!*${
+          configName !== teamName ? `\n_${configName}_` : ""
+        }\n\nPlease answer the following questions:`,
       },
     },
     {
@@ -46,7 +54,7 @@ function buildStandupBlocks(questions: any[], standupConfigId: string) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Reply to this message with your answers. Number each response to match the questions above.\n\n_Example:_\n1. Fixed bug #123\n2. Will deploy to production\n3. No blockers",
+        text: "👆 *How to reply:* Hover over *this message* → click *Reply in thread* → type your numbered answers.\n\n_Example:_\n1. Fixed bug #123\n2. Will deploy to production\n3. No blockers\n\n⚠️ _Do NOT type in the main chat — use the thread on this message so your response reaches the right team._",
       },
     },
     {
@@ -54,7 +62,7 @@ function buildStandupBlocks(questions: any[], standupConfigId: string) {
       elements: [
         {
           type: "mrkdwn",
-          text: `🧪 *Test Mode* | Standup ID: \`${standupConfigId}\``,
+          text: `🧪 *Test Mode* | 📋 ${teamName} | Standup ID: \`${standupConfigId}\``,
         },
       ],
     }
@@ -165,21 +173,30 @@ export async function POST(
     let sentCount = 0;
     const errors: string[] = [];
     const recipients: string[] = [];
+    const botToken = decrypt(workspace.botToken);
 
     // Send standups for each config
     for (const config of configs) {
-      const blocks = buildStandupBlocks(config.questions, config.id);
-      const fallbackText = `[TEST] Time for your daily standup! Please answer ${config.questions.length} questions.`;
+      const teamName = config.team.name;
+      const blocks = buildStandupBlocks(
+        config.questions,
+        config.id,
+        teamName,
+        config.name
+      );
+      const fallbackText = `[${teamName}] Time for your standup! Please answer ${config.questions.length} questions.`;
 
       for (const member of config.team.teamMembers) {
         if (!member.slackUserId) {
           console.log(`⚠️ No Slack user ID for ${member.user.email}`);
-          errors.push(`No Slack ID for ${member.user.email}`);
+          errors.push(
+            `${member.user.name || member.user.email} has no Slack user ID — go to Team Settings → Members and re-add them via the Slack picker`
+          );
           continue;
         }
 
         const result = await sendSlackDM(
-          workspace.botToken,
+          botToken,
           member.slackUserId,
           fallbackText,
           blocks

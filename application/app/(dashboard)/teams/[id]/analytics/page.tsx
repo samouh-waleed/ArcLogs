@@ -111,22 +111,36 @@ export default function TeamAnalyticsPage() {
   }
 
   if (!analytics) {
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <BarChart3 className="h-12 w-12 text-muted-foreground" />
+        <h3 className="text-lg font-semibold">No analytics data yet</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Start running standups and let the team respond — data will appear
+          here once responses are processed.
+        </p>
+      </div>
+    );
   }
 
   // Process response rate data
+  // Guard against 0 team members (avoid NaN/Infinity)
   const responseRateData = analytics.responseRate.map((item: any) => ({
     date: new Date(item.date).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     }),
-    rate: ((item.response_count / item.total_members) * 100).toFixed(1),
+    rate:
+      item.total_members > 0
+        ? ((item.response_count / item.total_members) * 100).toFixed(1)
+        : "0",
     responses: item.response_count,
     total: item.total_members,
   }));
 
-  // Process sentiment data
+  // Process sentiment data — skip rows where sentiment is null (unprocessed)
   const sentimentByDate = analytics.sentiment.reduce((acc: any, item: any) => {
+    if (!item.sentiment) return acc; // skip null sentiment rows
     const date = new Date(item.date).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -134,16 +148,16 @@ export default function TeamAnalyticsPage() {
     if (!acc[date]) {
       acc[date] = { date, positive: 0, neutral: 0, negative: 0 };
     }
-    acc[date][item.sentiment || "neutral"] = parseInt(item.count);
+    acc[date][item.sentiment] = parseInt(item.count);
     return acc;
   }, {});
 
   const sentimentData = Object.values(sentimentByDate);
 
-  // Calculate sentiment distribution for pie chart
+  // Calculate sentiment distribution for pie chart — skip null sentiment rows
   const sentimentTotals = analytics.sentiment.reduce((acc: any, item: any) => {
-    const sentiment = item.sentiment || "neutral";
-    acc[sentiment] = (acc[sentiment] || 0) + parseInt(item.count);
+    if (!item.sentiment) return acc;
+    acc[item.sentiment] = (acc[item.sentiment] || 0) + parseInt(item.count);
     return acc;
   }, {});
 
@@ -187,13 +201,23 @@ export default function TeamAnalyticsPage() {
 
   const helpRequestData = Object.values(helpRequestsByDate);
 
-  // Calculate participation percentage
-  const expectedDays = parseInt(timeRange);
+  // Participation % denominator = actual days standups occurred in the period.
+  // Using the calendar time range (e.g. 30 days) was wrong because Mon-Fri teams
+  // only have ~22 standup days in 30 calendar days, making perfect responders
+  // appear at ~73%. Using responseRate.length gives the true count of days
+  // standups happened.
+  const actualStandupDays = Math.max(1, analytics.responseRate.length);
   const participationData = analytics.memberParticipation.map(
     (member: any) => ({
       name: member.name,
-      participation: ((member.days_responded / expectedDays) * 100).toFixed(1),
-      daysResponded: member.days_responded,
+      participation: (
+        (member.days_responded / actualStandupDays) *
+        100
+      ).toFixed(1),
+      daysResponded: Number(member.days_responded),
+      totalDays: actualStandupDays,
+      // avg_sentiment_score: positive=1, neutral=0.5, negative=0
+      // Multiply by 100 for display; thresholds >66=positive, >33=neutral, <=33=negative
       sentimentScore: (
         parseFloat(member.avg_sentiment_score || 0) * 100
       ).toFixed(0),
@@ -236,7 +260,7 @@ export default function TeamAnalyticsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -246,7 +270,11 @@ export default function TeamAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalResponses}</div>
-            <p className="text-xs text-muted-foreground">Standup submissions</p>
+            <p className="text-xs text-muted-foreground">
+              {stats.totalResponses > 0 && stats.completedResponses < stats.totalResponses
+                ? `${stats.completedResponses} processed by AI`
+                : "Standup submissions"}
+            </p>
           </CardContent>
         </Card>
 
@@ -288,10 +316,40 @@ export default function TeamAnalyticsPage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.avgProcessingTime}s</div>
+            <div className="text-2xl font-bold">
+              {stats.avgProcessingTime != null
+                ? `${stats.avgProcessingTime}s`
+                : "—"}
+            </div>
             <p className="text-xs text-muted-foreground">AI analysis time</p>
           </CardContent>
         </Card>
+
+        {/* Voice vs Text breakdown — only shown if any voice or text responses exist */}
+        {(stats.voiceResponses > 0 || stats.textResponses > 0) && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Response Types
+              </CardTitle>
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.voiceResponses > 0
+                  ? `${Math.round(
+                      (stats.voiceResponses /
+                        (stats.voiceResponses + stats.textResponses)) *
+                        100
+                    )}%`
+                  : "0%"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Voice ({stats.voiceResponses}) · Text ({stats.textResponses})
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Response Rate Chart */}
@@ -483,7 +541,7 @@ export default function TeamAnalyticsPage() {
                   <div>
                     <p className="font-medium">{member.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {member.daysResponded} responses
+                      {member.daysResponded}/{member.totalDays} standup days
                     </p>
                   </div>
                 </div>

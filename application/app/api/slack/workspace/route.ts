@@ -1,8 +1,8 @@
 // app/api/slack/workspace/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { slackWorkspace } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { slackWorkspace, member } from "@/drizzle/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
@@ -27,14 +27,34 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch workspace
-    const workspace = await db.query.slackWorkspace.findFirst({
-      where: eq(slackWorkspace.organizationId, orgId),
+    // Verify the requesting user belongs to this org
+    const membership = await db.query.member.findFirst({
+      where: and(
+        eq(member.organizationId, orgId),
+        eq(member.userId, session.user.id),
+        isNull(member.deletedAt)
+      ),
     });
 
-    return NextResponse.json({
-      workspace: workspace || null,
+    if (!membership) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Fetch workspace
+    const workspace = await db.query.slackWorkspace.findFirst({
+      where: and(
+        eq(slackWorkspace.organizationId, orgId),
+        isNull(slackWorkspace.deletedAt)
+      ),
     });
+
+    if (!workspace) {
+      return NextResponse.json({ workspace: null });
+    }
+
+    // Never expose the bot token to the frontend
+    const { botToken: _bt, ...safeWorkspace } = workspace;
+    return NextResponse.json({ workspace: safeWorkspace });
   } catch (error) {
     console.error("Error fetching Slack workspace:", error);
     return NextResponse.json(

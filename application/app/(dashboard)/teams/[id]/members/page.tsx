@@ -22,6 +22,7 @@ import {
   Search,
   AlertCircle,
   CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,31 +35,63 @@ export default function AddMembersPage() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  // Map of email → { memberId, slackUserId } for existing team members
+  const [existingMembers, setExistingMembers] = useState<
+    Map<string, { id: string; slackUserId: string | null }>
+  >(new Map());
   const params = useParams();
   const teamId = params.id as string;
 
   const { data: activeOrg } = authClient.useActiveOrganization();
 
-  // Load Slack users
+  // Load Slack users + existing team members in parallel
   useEffect(() => {
     if (!activeOrg?.id) return;
 
-    async function loadSlackUsers() {
+    async function loadData() {
       try {
-        const response = await fetch(`/api/slack/users?orgId=${activeOrg?.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setSlackUsers(data.users);
+        const [slackRes, membersRes] = await Promise.all([
+          fetch(`/api/slack/users?orgId=${activeOrg?.id}`),
+          fetch(`/api/teams/${teamId}/members`),
+        ]);
+
+        let users: any[] = [];
+        if (slackRes.ok) {
+          const data = await slackRes.json();
+          users = data.users || [];
+          setSlackUsers(users);
+        }
+
+        if (membersRes.ok) {
+          const data = await membersRes.json();
+          const map = new Map<string, { id: string; slackUserId: string | null }>();
+          for (const m of data.members || []) {
+            if (m.user?.email) {
+              map.set(m.user.email, { id: m.id, slackUserId: m.slackUserId });
+            }
+          }
+          setExistingMembers(map);
+
+          // Pre-select Slack users whose email matches a team member that
+          // has no Slack user ID — these are the ones that need re-linking.
+          const toPreselect = new Set<string>();
+          for (const slackUser of users) {
+            const existing = map.get(slackUser.email);
+            if (existing && !existing.slackUserId) {
+              toPreselect.add(slackUser.id);
+            }
+          }
+          setSelectedUsers(toPreselect);
         }
       } catch (error) {
-        console.error("Failed to load Slack users:", error);
+        console.error("Failed to load data:", error);
       } finally {
         setLoadingUsers(false);
       }
     }
 
-    loadSlackUsers();
-  }, [activeOrg?.id]);
+    loadData();
+  }, [activeOrg?.id, teamId]);
 
   const filteredUsers = slackUsers.filter(
     (user) =>
@@ -146,7 +179,10 @@ export default function AddMembersPage() {
         <CardHeader>
           <CardTitle>Select Members</CardTitle>
           <CardDescription>
-            Choose team members who will receive standup questions
+            Select members from your Slack workspace. Members marked{" "}
+            <span className="text-amber-600 font-medium">Needs linking</span>{" "}
+            are already in the team but need their Slack account re-linked —
+            they are pre-selected for you.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -183,34 +219,53 @@ export default function AddMembersPage() {
                   No users found
                 </p>
               ) : (
-                filteredUsers.map((user) => (
-                  <label
-                    key={user.id}
-                    htmlFor={`user-${user.id}`}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer"
-                  >
-                    <Checkbox
-                      id={`user-${user.id}`}
-                      checked={selectedUsers.has(user.id)}
-                      onCheckedChange={() => toggleUser(user.id)}
-                    />
-                    {user.avatar && (
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="h-10 w-10 rounded-full"
+                filteredUsers.map((user) => {
+                  const existing = existingMembers.get(user.email);
+                  const isLinked = existing?.slackUserId != null;
+                  const needsLinking = existing && !existing.slackUserId;
+
+                  return (
+                    <label
+                      key={user.id}
+                      htmlFor={`user-${user.id}`}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer"
+                    >
+                      <Checkbox
+                        id={`user-${user.id}`}
+                        checked={selectedUsers.has(user.id)}
+                        onCheckedChange={() => toggleUser(user.id)}
                       />
-                    )}
-                    <div className="flex-1">
-                      <p className="font-medium">{user.name}</p>
-                      {user.email && (
-                        <p className="text-sm text-muted-foreground">
-                          {user.email}
-                        </p>
+                      {user.avatar && (
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="h-10 w-10 rounded-full"
+                        />
                       )}
-                    </div>
-                  </label>
-                ))
+                      <div className="flex-1">
+                        <p className="font-medium">{user.name}</p>
+                        {user.email && (
+                          <p className="text-sm text-muted-foreground">
+                            {user.email}
+                          </p>
+                        )}
+                      </div>
+                      {/* Membership status badge */}
+                      {isLinked && (
+                        <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">
+                          <CheckCircle className="h-3 w-3" />
+                          Linked
+                        </span>
+                      )}
+                      {needsLinking && (
+                        <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                          <AlertTriangle className="h-3 w-3" />
+                          Needs linking
+                        </span>
+                      )}
+                    </label>
+                  );
+                })
               )}
             </div>
 
