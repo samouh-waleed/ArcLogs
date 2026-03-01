@@ -242,6 +242,7 @@ export const jiraLink = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+    deletedAt: timestamp("deleted_at"),
   },
   (table) => [
     // Idempotency constraint: prevent duplicate tickets on response edits
@@ -253,6 +254,7 @@ export const jiraLink = pgTable(
     index("jira_link_responseId_idx").on(table.standupResponseId),
     index("jira_link_issueKey_idx").on(table.jiraIssueKey),
     index("jira_link_actionType_idx").on(table.actionType),
+    index("jira_link_deletedAt_idx").on(table.deletedAt),
   ]
 );
 

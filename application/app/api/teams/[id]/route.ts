@@ -1,8 +1,17 @@
 // app/api/teams/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { team, member, teamMember, standupConfig } from "@/drizzle/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import {
+  team,
+  member,
+  teamMember,
+  standupConfig,
+  standupResponse,
+  insight,
+  helpRequest,
+  jiraLink,
+} from "@/drizzle/schema";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
@@ -190,11 +199,84 @@ export async function DELETE(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Soft delete team
-    await db
-      .update(team)
-      .set({ deletedAt: new Date() })
-      .where(eq(team.id, teamId));
+    // Cascade soft-delete: team + all related records in a transaction
+    const now = new Date();
+
+    await db.transaction(async (tx) => {
+      // 1. Help requests
+      await tx
+        .update(helpRequest)
+        .set({ deletedAt: now })
+        .where(
+          and(eq(helpRequest.teamId, teamId), isNull(helpRequest.deletedAt))
+        );
+
+      // 2. Insights
+      await tx
+        .update(insight)
+        .set({ deletedAt: now })
+        .where(and(eq(insight.teamId, teamId), isNull(insight.deletedAt)));
+
+      // 3. Jira links (linked through standup_response)
+      const teamResponses = await tx
+        .select({ id: standupResponse.id })
+        .from(standupResponse)
+        .where(
+          and(
+            eq(standupResponse.teamId, teamId),
+            isNull(standupResponse.deletedAt)
+          )
+        );
+
+      if (teamResponses.length > 0) {
+        const responseIds = teamResponses.map((r) => r.id);
+        await tx
+          .update(jiraLink)
+          .set({ deletedAt: now })
+          .where(
+            and(
+              inArray(jiraLink.standupResponseId, responseIds),
+              isNull(jiraLink.deletedAt)
+            )
+          );
+      }
+
+      // 4. Standup responses
+      await tx
+        .update(standupResponse)
+        .set({ deletedAt: now })
+        .where(
+          and(
+            eq(standupResponse.teamId, teamId),
+            isNull(standupResponse.deletedAt)
+          )
+        );
+
+      // 5. Standup configs
+      await tx
+        .update(standupConfig)
+        .set({ deletedAt: now })
+        .where(
+          and(
+            eq(standupConfig.teamId, teamId),
+            isNull(standupConfig.deletedAt)
+          )
+        );
+
+      // 6. Team members
+      await tx
+        .update(teamMember)
+        .set({ deletedAt: now })
+        .where(
+          and(eq(teamMember.teamId, teamId), isNull(teamMember.deletedAt))
+        );
+
+      // 7. Team itself (last)
+      await tx
+        .update(team)
+        .set({ deletedAt: now })
+        .where(eq(team.id, teamId));
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

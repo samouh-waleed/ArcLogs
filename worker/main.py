@@ -2107,7 +2107,7 @@ def generate_team_digest(team_id: str, date: str):
         cur.execute("""
             SELECT t.name, t.slack_channel_id, t.organization_id
             FROM team t
-            WHERE t.id = %s
+            WHERE t.id = %s AND t.deleted_at IS NULL
         """, (team_id,))
         
         team = cur.fetchone()
