@@ -192,14 +192,21 @@ export async function POST(req: NextRequest) {
 
       console.log("✅ Workspace found:", workspace.slackTeamName);
 
+      // Skip bot messages early to prevent any feedback loops
+      if (slackEvent.bot_id || slackEvent.subtype === "bot_message") {
+        return NextResponse.json({ ok: true });
+      }
+
+      // Check subscription: no subscription = free plan (allowed).
+      // Only block if a subscription exists but is expired/canceled.
       const activeSubscription = await db.query.subscription.findFirst({
         where: eq(subscription.referenceId, workspace.organizationId),
       });
 
       if (
-        !activeSubscription ||
-        (activeSubscription.status !== "active" &&
-          activeSubscription.status !== "trialing")
+        activeSubscription &&
+        activeSubscription.status !== "active" &&
+        activeSubscription.status !== "trialing"
       ) {
         await sendSlackDM(
           workspaceDecrypted.botToken,
