@@ -308,14 +308,17 @@ async function handleStandupResponse(event: any, workspace: any) {
         },
       });
 
-      if (!allMembers.length) {
+      // Filter out members from deleted teams (defense-in-depth)
+      const activeMembers = allMembers.filter((m) => !m.team.deletedAt);
+
+      if (!activeMembers.length) {
         console.log("⚠️ No team member found for Slack user:", slackUserId);
         return;
       }
 
       // Find the first team with an unanswered standup today
       let chosenMember: TeamMemberWithRelations | undefined;
-      for (const m of allMembers as TeamMemberWithRelations[]) {
+      for (const m of activeMembers as TeamMemberWithRelations[]) {
         if (!m.team.standupConfigs.length) continue;
         const cfg = m.team.standupConfigs[0];
         const existing = await db.query.standupResponse.findFirst({
@@ -335,7 +338,7 @@ async function handleStandupResponse(event: any, workspace: any) {
 
       if (!chosenMember) {
         // All standups answered — take first membership as fallback
-        chosenMember = allMembers[0] as TeamMemberWithRelations;
+        chosenMember = activeMembers[0] as TeamMemberWithRelations;
       }
 
       member = chosenMember;
@@ -349,7 +352,7 @@ async function handleStandupResponse(event: any, workspace: any) {
 
       // If user is in multiple teams with pending standups, let them know
       // they should reply in the thread next time.
-      const teamsWithPending = (allMembers as TeamMemberWithRelations[]).filter(
+      const teamsWithPending = (activeMembers as TeamMemberWithRelations[]).filter(
         (m) => m.team.standupConfigs.length > 0 && m.teamId !== member!.teamId
       );
       if (teamsWithPending.length > 0) {
@@ -552,7 +555,7 @@ async function handleAudioStandupResponse(
       },
     })) as TeamMemberWithRelations | undefined;
 
-    if (!member) {
+    if (!member || member.team.deletedAt) {
       console.log("⚠️ No team member found for Slack user:", slackUserId);
       return;
     }
