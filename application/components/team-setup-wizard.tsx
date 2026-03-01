@@ -277,34 +277,48 @@ export function TeamSetupWizard({ organizationId }: TeamSetupWizardProps) {
       setCreatedTeamId(teamId);
 
       // 2. Add members
-      for (const slackUserId of selectedUsers) {
-        const slackUser = slackUsers.find((u) => u.id === slackUserId);
-        if (!slackUser) continue;
-
-        await fetch(`/api/teams/${teamId}/members`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      const membersToAdd = selectedUsers
+        .map((slackUserId) => {
+          const slackUser = slackUsers.find((u) => u.id === slackUserId);
+          if (!slackUser) return null;
+          return {
             email: slackUser.email,
             slackUserId: slackUser.id,
             name: slackUser.name,
-          }),
+          };
+        })
+        .filter(Boolean);
+
+      if (membersToAdd.length > 0) {
+        const membersRes = await fetch(`/api/teams/${teamId}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ members: membersToAdd }),
         });
+        if (!membersRes.ok) {
+          const data = await membersRes.json();
+          console.error("Failed to add members:", data.error);
+        }
       }
 
       // 3. Create standup config
-      await fetch("/api/standups", {
+      const standupRes = await fetch("/api/standups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           teamId,
+          name: teamName,
           questions,
           scheduleTime,
           timezone,
-          days: selectedDays,
+          scheduleDays: selectedDays,
           allowVoiceResponses: allowVoice,
         }),
       });
+      if (!standupRes.ok) {
+        const data = await standupRes.json();
+        console.error("Failed to create standup:", data.error);
+      }
 
       // Move to final step
       setCurrentStep(5);
