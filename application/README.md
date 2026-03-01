@@ -112,9 +112,11 @@ Subscription emails sent via Resend in `lib/auth.ts` callbacks: upgrade confirma
 
 ## Database
 
-PostgreSQL on Neon with pgvector. Key tables: `user`, `organization`, `team`, `team_member`, `standup_config`, `standup_response` (`processingStatus` values: `awaiting_response` → `pending` → `completed`/`failed`), `insight`, `help_request`, `jira_connection`, `jira_link`, `team_expertise`, `subscription`.
+PostgreSQL on Neon. Key tables: `user`, `organization`, `team`, `team_member`, `standup_config`, `standup_response` (`processingStatus` values: `awaiting_response` → `pending` → `completed`/`failed`), `insight`, `help_request`, `jira_connection`, `jira_link`, `subscription`.
 
-Schema managed via Drizzle ORM (`drizzle/schema.ts`). Vector columns managed via raw SQL migrations in `worker/migrations/`.
+Schema managed via Drizzle ORM (`drizzle/schema.ts`).
+
+**Soft-delete cascade:** Deleting a team (`DELETE /api/teams/[id]`) soft-deletes all child records in a transaction: `help_request`, `insight`, `jira_link`, `standup_response`, `standup_config`, `team_member`, then `team`. All team-related tables have a `deleted_at` column. A one-time backfill script is at `scripts/backfill-soft-delete-cascade.sql`.
 
 ## Auth & Middleware
 

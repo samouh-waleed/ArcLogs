@@ -87,7 +87,7 @@ Handles both text and audio standup responses:
 | `invitation` | Email invitations to orgs |
 | `slack_workspace` | Slack workspace connections per org (bot_token, team_id) |
 | `jira_connection` | Jira config per org (domain, email, API token, project key) |
-| `jira_link` | Maps standup responses to Jira actions (idempotency via blocker_hash + action_type) |
+| `jira_link` | Maps standup responses to Jira actions (idempotency via blocker_hash + action_type, has deletedAt) |
 | `team` | Teams within orgs with Slack channel mapping |
 | `team_member` | Team membership with slack_user_id |
 | `standup_config` | Standup settings (questions, schedule, timezone, days, allowVoiceResponses) |
@@ -310,11 +310,11 @@ Plan limits are enforced in `lib/limits.ts`. The `subscription.plan` field (set 
 - [~] RAG Phase 1A: Whisper prompt injection (team names + sprint issues as context)
 - [~] RAG Phase 1B: Historical context in GPT-4 prompt (last 5 standups + active blockers)
 - [~] RAG Phase 1C: In-memory TTL cache for team members + sprint issues
-- [x] RAG Phase 2: pgvector enabled, embeddings on standup_response + insight (backfilled)
 - [~] RAG Phase 3A: Semantic task matching via embedding similarity fallback
 - [~] RAG Phase 3B: Blocker pattern detection in daily digests + similar past blockers
 - [~] RAG Phase 3C: Team knowledge base (expertise extraction + expert suggestions)
 Note: [~] = implemented but not fully end-to-end tested in production-like scenario
+Note: pgvector embedding columns on `standup_response` and `insight` were removed from the Drizzle schema. `team_expertise` table was also dropped. RAG phases that relied on these still have worker-side code but the schema columns no longer exist.
 
 ### Not Yet Implemented
 - [ ] RAG Phase 4: Learning system (decision tracking, feedback buttons, confidence tuning)
@@ -376,9 +376,26 @@ Key correctness rules:
 - `avgProcessingTime` returns `null` when no completed responses → UI shows `"—"` not `"0s"`
 - Sentiment query includes `AND ai_insights->>'sentiment' IS NOT NULL` to exclude unprocessed rows
 
+## Soft-Delete Cascade (Team Deletion)
+
+When a team is deleted via `DELETE /api/teams/[id]`, all related records are soft-deleted in a single `db.transaction()`:
+1. `help_request` — WHERE teamId = X
+2. `insight` — WHERE teamId = X
+3. `jira_link` — WHERE standupResponseId IN (team's response IDs)
+4. `standup_response` — WHERE teamId = X
+5. `standup_config` — WHERE teamId = X
+6. `team_member` — WHERE teamId = X
+7. `team` — soft-deleted last
+
+**Defense-in-depth filters:**
+- Slack events handler (`events/route.ts`): filters `allMembers` by `!m.team.deletedAt` in the fallback DM path; checks `member.team.deletedAt` in the audio path
+- Worker digest (`main.py`): `generate_team_digest()` query includes `AND t.deleted_at IS NULL`
+
+**Backfill script:** `scripts/backfill-soft-delete-cascade.sql` — run against Neon to cascade `deleted_at` on orphaned records from teams deleted before this code shipped.
+
 ## Conventions
 - **IDs**: nanoid for application-generated IDs, gen_random_uuid()::text in worker SQL
-- **Soft deletes**: `deleted_at` column pattern throughout
+- **Soft deletes**: `deleted_at` column pattern on all team-related tables (including `jira_link`)
 - **Timestamps**: `created_at`, `updated_at` on all tables
 - **Org scoping**: All data is scoped through organization → team → member chain
 - **Slack user mapping**: `team_member.slack_user_id` maps Slack users to app users

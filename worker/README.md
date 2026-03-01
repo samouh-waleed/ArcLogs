@@ -68,10 +68,11 @@ The worker enforces plan gates before running paid features. `get_org_plan(cur, 
 7. Run the text standup pipeline above
 
 ### Daily Digest (`generate_digest`)
-1. Aggregate completed responses for team/date
-2. Build summary with highlights, blockers, help requests, mood
-3. Detect recurring blocker patterns via pgvector clustering
-4. Post to team's Slack channel
+1. Verify team is not soft-deleted (`deleted_at IS NULL`)
+2. Aggregate completed responses for team/date
+3. Build summary with highlights, blockers, help requests, mood
+4. Detect recurring blocker patterns via pgvector clustering
+5. Post to team's Slack channel
 
 ## Environment Variables
 
