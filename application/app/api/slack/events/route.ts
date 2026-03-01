@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   slackWorkspace,
-  subscription,
   standupResponse,
   teamMember,
   standupConfig,
@@ -197,25 +196,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Check subscription: no subscription = free plan (allowed).
-      // Only block if a subscription exists but is expired/canceled.
-      const activeSubscription = await db.query.subscription.findFirst({
-        where: eq(subscription.referenceId, workspace.organizationId),
-      });
-
-      if (
-        activeSubscription &&
-        activeSubscription.status !== "active" &&
-        activeSubscription.status !== "trialing"
-      ) {
-        await sendSlackDM(
-          workspaceDecrypted.botToken,
-          workspaceDecrypted.installedBy!,
-          "⚠️ Your ArcLogs subscription is inactive. Please update payment at " +
-            process.env.NEXT_PUBLIC_APP_URL
-        );
-        return NextResponse.json({ ok: true });
-      }
+      // Note: No subscription check here. Free plan users can still send
+      // text standups. Plan-specific features (voice, Jira) are gated in the
+      // worker via get_org_plan(). An expired/canceled subscription simply
+      // means the user falls back to free plan limits.
 
       switch (slackEvent.type) {
         case "message":
