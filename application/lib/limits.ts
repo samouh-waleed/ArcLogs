@@ -24,7 +24,7 @@ export const PLAN_LIMITS: Record<OrgPlan, PlanConfig> = {
     teams: 1,
     members: 5,
     standups: 1,
-    voice: false,
+    voice: true,
     jira: false,
     historyDays: 30,
   },

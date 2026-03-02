@@ -397,8 +397,8 @@ function DashboardContent() {
                     }`}
                   >
                     {atLimit
-                      ? "Upgrade to Pro for unlimited teams, 50 members, voice standups, and Jira automation."
-                      : "Voice standups and Jira automation are locked. Upgrade to Pro to unlock all features."}
+                      ? "Upgrade to Pro for unlimited teams, members, Jira automation, and unlimited data retention."
+                      : "Jira automation is locked. Upgrade to Pro to unlock all features."}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {[

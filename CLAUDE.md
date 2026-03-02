@@ -243,7 +243,7 @@ Plan limits are enforced in `lib/limits.ts`. The `subscription.plan` field (set 
 | Teams per org | 1 | Unlimited |
 | Org members | 5 | Unlimited (billed per member via Stripe) |
 | Standup configs per team | 1 | Unlimited |
-| Voice standups (Whisper) | ❌ | ✅ |
+| Voice standups (Whisper) | ✅ | ✅ |
 | Jira automation | ❌ | ✅ |
 | History retention | 30 days | Unlimited |
 
@@ -253,14 +253,11 @@ Plan limits are enforced in `lib/limits.ts`. The `subscription.plan` field (set 
 
 **Frontend/API feature gate helpers:** `canUseVoice(orgId)`, `canUseJira(orgId)` in `lib/limits.ts`
 
-**Voice UI gate (implemented):**
-- `POST /api/standups` and `PUT /api/standups/[id]` — `canUseVoice(orgId)` clamps `allowVoiceResponses → false` for free orgs server-side
-- `standups/new/page.tsx`, `standups/[configId]/edit/page.tsx` — fetch `features.voice` from `/api/organization-usage`, show Skeleton while loading, Lock row with "Upgrade to Pro" link for free, normal Switch for pro
-- `components/team-setup-wizard.tsx` — same pattern; uses `voiceEnabled === false` (strict) so Switch stays visible while loading (`null`)
+**Voice standups:** Available on all plans (free, pro, enterprise). `canUseVoice()` returns `true` for all plans. The `POST /api/standups` and `PUT /api/standups/[id]` routes still call `canUseVoice()` as defense-in-depth but it always passes. UI pages retain dead-code lock icon branches that never render since `features.voice` is always `true`.
 
 **Worker feature gates (`worker/main.py`):**
 - `get_org_plan(cur, organization_id)` — Python mirror of `getOrgPlan()`, reads `subscription.plan`
-- Voice gate in `process_audio_standup`: checked after `bot_token` is set, before `download_slack_file`. Free plan → DM user + mark response `failed` + return early.
+- Voice: no gate — available on all plans. Worker processes audio standups regardless of plan.
 - Jira gate in `process_standup_response`: checked after `jira_connection` is resolved, before `sync_to_jira`. Free plan → sets `jira_connection = None`, which also skips task transitions (both blocks already gated on `if jira_connection`).
 
 **Architecture decision:** Slack workspace and Jira connection remain org-level (one per org). Teams select a channel from the org's Slack workspace. Team-level Jira project overrides (`team.jiraProjectKey`) handle the case where teams work on different Jira projects.
