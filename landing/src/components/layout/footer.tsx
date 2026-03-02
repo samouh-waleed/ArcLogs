@@ -29,8 +29,8 @@ const DEFAULT_NAV: NavSection[] = [
   {
     title: 'Resources',
     links: [
-      { name: 'Sign In', href: '/login' },
-      { name: 'Sign Up', href: '/signup' },
+      { name: 'Sign In', href: 'https://app.arclogs.com/login' },
+      { name: 'Sign Up', href: 'https://app.arclogs.com/signup' },
     ],
   },
 ];

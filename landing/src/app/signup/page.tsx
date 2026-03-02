@@ -12,7 +12,7 @@ export default function Login() {
   return (
     <section className="bg-primary-300 min-h-[820px] px-6 py-10 text-white lg:py-24">
       <div className="container mx-auto flex max-w-[400px] flex-col items-center justify-center py-10">
-        <Link href="/" aria-label="Zippay home" className="mb-5">
+        <Link href="/" aria-label="ArcLogs home" className="mb-5">
           <Image
             src="/images/logos/white.svg"
             alt="logo light"
@@ -24,7 +24,7 @@ export default function Login() {
 
         <div className="w-full text-center">
           <h1 className="text-2xl leading-tight font-semibold">
-            Welcome to Zippay!
+            Welcome to ArcLogs!
           </h1>
           <p className="mt-2 text-sm text-white/80">
             Please enter your details to create your account
@@ -92,7 +92,7 @@ export default function Login() {
         <p className="mt-8 text-center text-sm text-white/80">
           Already have an account?{' '}
           <Link
-            href="/login"
+            href="https://app.arclogs.com/login"
             className="text-white underline underline-offset-4"
           >
             Sign In

@@ -80,15 +80,20 @@ const Navbar = () => {
           <div className="flex items-center gap-2.5">
             {/* ThemeToggle removed as requested */}
 
-            <Link href="/login" className="hidden lg:block">
+            <Link
+              href="https://app.arclogs.com/login"
+              className="hidden lg:block"
+            >
               <Button size="sm" variant="secondary">
                 Sign In
               </Button>
             </Link>
-            <Link href="#waitlist" className="hidden lg:block">
-              {/* Added text-white to enforce white font color */}
+            <Link
+              href="https://app.arclogs.com/signup"
+              className="hidden lg:block"
+            >
               <Button size="sm" className="text-white">
-                Join Waitlist
+                Get Started Free
               </Button>
             </Link>
 
@@ -143,7 +148,7 @@ const Navbar = () => {
               </Link>
             ))}
             <div className="flex flex-col gap-3 pb-20 sm:flex-row sm:gap-4">
-              <Link href="/login">
+              <Link href="https://app.arclogs.com/login">
                 <Button
                   variant="secondary"
                   className="w-full"
@@ -154,14 +159,14 @@ const Navbar = () => {
                   Sign In
                 </Button>
               </Link>
-              <Link href="#waitlist">
+              <Link href="https://app.arclogs.com/signup">
                 <Button
                   className="w-full text-white"
                   onClick={() => {
                     setIsMenuOpen(false);
                   }}
                 >
-                  Join Waitlist
+                  Get Started Free
                 </Button>
               </Link>
             </div>

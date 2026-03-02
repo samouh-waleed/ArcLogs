@@ -32,8 +32,8 @@ const DEFAULT_PLANS: Plan[] = [
       'Perfect for small teams looking to eliminate daily meeting overhead.',
     price: 0,
     period: '/ Forever',
-    ctaLabel: 'Get Started',
-    href: 'https://app.arclogs.com/login',
+    ctaLabel: 'Get Started Free',
+    href: 'https://app.arclogs.com/signup',
     features: [
       'Up to 10 users',
       '1 active team',
@@ -48,7 +48,7 @@ const DEFAULT_PLANS: Plan[] = [
     price: 12,
     period: '/ user / month',
     ctaLabel: 'Start Free Trial',
-    href: 'https://app.arclogs.com/login',
+    href: 'https://app.arclogs.com/signup',
     features: [
       'Unlimited teams',
       'Advanced AI Insight Extraction',

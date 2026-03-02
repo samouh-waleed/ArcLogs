@@ -19,7 +19,7 @@ export default function ZippayCtaCard({
   title = 'Ready to reclaim your time?',
   description = 'Join engineering teams that have switched to Arc Logs and stopped wasting hours in daily meetings.',
   primaryLabel = 'Get Started',
-  primaryHref = 'https://app.arclogs.com/loginin',
+  primaryHref = 'https://app.arclogs.com/signup',
   // secondaryLabel = 'Why Arc Logs?',
   // secondaryHref = '#how-it-works',
   softBg,
