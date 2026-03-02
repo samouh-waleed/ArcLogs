@@ -6,7 +6,7 @@ import HeroIllustration from '@/components/hero-section/HeroIllustration';
 import { Button } from '@/components/ui/button';
 
 export default function ArcLogsHero() {
-  // const SIGNIN_URL = 'https://app.arclogs.com/login';
+  const APP_URL = 'https://app.arclogs.com';
 
   return (
     <section
@@ -52,9 +52,9 @@ export default function ArcLogsHero() {
                   <Button
                     asChild
                     className="bg-primary text-primary-foreground w-full hover:opacity-90 sm:w-auto"
-                    aria-label="Join Waitlist"
+                    aria-label="Get Started Free"
                   >
-                    <Link href="#waitlist">Join Waitlist</Link>
+                    <Link href={`${APP_URL}/signup`}>Get Started Free</Link>
                   </Button>
                 </div>
               </div>

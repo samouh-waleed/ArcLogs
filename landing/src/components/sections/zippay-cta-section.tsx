@@ -1,10 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 type CTAProps = {
   title?: string;
@@ -17,43 +16,9 @@ export default function ZippayCtaSection({
   description = `Join engineering teams that have switched to ArcLogs and stopped wasting hours in meetings.`,
   patternSrc = '/images/homepage/cta/pattern.webp',
 }: CTAProps) {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
-  >('idle');
-  const [message, setMessage] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('loading');
-    setMessage('');
-
-    try {
-      const response = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatus('success');
-        setMessage('Thanks for joining! Check your email for confirmation.');
-        setEmail('');
-      } else {
-        setStatus('error');
-        setMessage(data.error || 'Something went wrong. Please try again.');
-      }
-    } catch {
-      setStatus('error');
-      setMessage('Failed to join waitlist. Please try again.');
-    }
-  };
-
   return (
     <section
-      id="waitlist"
+      id="cta"
       className="bg-primary-300 relative overflow-hidden px-6 py-10 text-white lg:py-26"
     >
       <div className="pointer-events-none absolute inset-0 hidden lg:block">
@@ -75,34 +40,21 @@ export default function ZippayCtaSection({
           {description}
         </p>
 
-        <form onSubmit={handleSubmit} className="mx-auto mt-10 max-w-md">
-          <div className="flex flex-col gap-3 sm:flex-row sm:gap-2">
-            <Input
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={status === 'loading'}
-              className="flex-1 border-white bg-white text-gray-900 placeholder:text-gray-500"
-            />
-            <Button
-              type="submit"
-              disabled={status === 'loading'}
-              className="w-full bg-white text-gray-900 hover:bg-gray-100 sm:w-auto"
-            >
-              {status === 'loading' ? 'Joining...' : 'Join Waitlist'}
-            </Button>
-          </div>
-
-          {message && (
-            <p
-              className={`mt-4 text-sm ${status === 'success' ? 'text-green-100' : 'text-red-200'}`}
-            >
-              {message}
-            </p>
-          )}
-        </form>
+        <div className="mx-auto mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <Button
+            asChild
+            className="w-full bg-white text-gray-900 hover:bg-gray-100 sm:w-auto"
+          >
+            <Link href="https://app.arclogs.com/signup">Get Started Free</Link>
+          </Button>
+          <Button
+            asChild
+            variant="secondary"
+            className="w-full border-white/20 bg-transparent text-white hover:bg-white/10 sm:w-auto"
+          >
+            <Link href="/pricing">View Pricing</Link>
+          </Button>
+        </div>
       </div>
     </section>
   );
