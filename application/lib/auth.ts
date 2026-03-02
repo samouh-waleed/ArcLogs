@@ -343,9 +343,8 @@ export const auth = betterAuth({
                         <p style="margin: 0; font-weight: 600; color: #991b1b;">What changes on the Free plan:</p>
                         <ul style="margin: 12px 0 0; padding-left: 20px; color: #4b5563;">
                           <li>Limited to 1 team and 5 members</li>
-                          <li>Voice standups are disabled</li>
                           <li>Jira automation is disabled</li>
-                          <li>Text standups and AI analysis continue to work</li>
+                          <li>Voice & text standups and AI analysis continue to work</li>
                         </ul>
                       </div>
                       <p style="font-size: 16px; color: #4b5563;">

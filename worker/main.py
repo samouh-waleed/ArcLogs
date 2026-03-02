@@ -1332,23 +1332,8 @@ def process_audio_standup(message_data: Dict):
 
         bot_token = decrypt_value(workspace["bot_token"])
 
-        # ── Voice feature gate ────────────────────────────────────────────
-        org_plan = get_org_plan(cur, response_data["organization_id"])
-        if org_plan == "free":
-            print(f"⛔ Voice standups not available on free plan (org {response_data['organization_id']})")
-            send_slack_notification(
-                bot_token,
-                response_data["slack_user_id"],
-                "⚠️ *Voice standups require a Pro plan.*\n\nPlease type your standup response, or upgrade your plan to use voice.",
-            )
-            cur.execute("""
-                UPDATE standup_response
-                SET processing_status = 'failed', updated_at = NOW()
-                WHERE id = %s
-            """, (response_id,))
-            conn.commit()
-            return
-        # ── End voice gate ────────────────────────────────────────────────
+        # Voice is available on all plans (free + pro + enterprise).
+        # Jira automation remains Pro-only.
 
         # Step 1: Download audio from Slack
         print(f"📥 Downloading audio from Slack...")
